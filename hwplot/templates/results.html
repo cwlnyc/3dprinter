@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block body %}
+<section class="step">
+  <h2><span class="num">5</span> Check and print</h2>
+  <p class="lead">This is exactly what the pen will write. Check every answer: a misread photo means a confidently wrong answer in ink.</p>
+  {% if notes %}<div class="note"><strong>Notes from the solver:</strong> {{ notes }}</div>{% endif %}
+  <div class="two">
+    <div><a href="/out/preview.png" target="_blank"><img class="shot" src="/out/preview.png?v={{ v }}" alt="The homework sheet with the answers written on in your handwriting"></a></div>
+    <div>
+      <h3 style="margin-top:0">Files</h3>
+      <div class="row">
+        {% if has_gcode %}<a class="btn" href="/out/answers.gcode?download=1">G-code for the printer</a>{% endif %}
+        <a class="btn secondary" href="/out/answers.svg?download=1">SVG</a>
+        <a class="btn secondary" href="/out/preview.png?download=1">Preview PNG</a>
+        <a class="btn secondary" href="/out/answers.json?download=1">answers.json</a>
+      </div>
+      {% if placement %}
+      <h3>Printing</h3>
+      <ol>
+        <li>Put the G-code on the printer's SD card (or send it with OctoPrint / Mainsail).</li>
+        <li>Lay the homework face up, <strong>top edge towards the back</strong> of the printer. Its top-left corner goes at bed <strong>X {{ placement[0] }}, Y {{ placement[1] }}</strong>. A Letter page is bigger than most beds, so it will hang over the edge. That's fine: the answers are centred on the bed.
+          {% if placement[0]|float < 0 %}<br>Negative X means the corner sits <strong>{{ '%.1f'|format(-(placement[0]|float)) }} mm left of the bed's left edge</strong>, past where the pen can reach. Measure it with a ruler from the edge of the bed.{% endif %}</li>
+        <li>Tape the corners down so it can't slide.</li>
+        <li>Start the print. It homes, moves the pen over the paper's top-left corner (if that's on the bed) and <strong>pauses</strong>. Slide the paper until the corner is right under the pen tip, then resume.</li>
+        <li>Stay nearby for the first few letters.</li>
+      </ol>
+      {% elif not has_gcode %}
+      <p class="flash warn">No G-code yet: some answers are out of the printer's reach. Tick “centre answers on the bed” below and redraw.</p>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<section class="step">
+  <h2>Fix anything wrong</h2>
+  <p class="lead">Change an answer or nudge where it goes, then redraw. No new API call, no cost. Positions are mm from the page's top-left corner.</p>
+  <form method="post" action="/results" data-busy="Redrawing…">
+    <table>
+      <tr><th>#</th><th>Question</th><th>Answer to write</th><th>x</th><th>y</th><th>width</th><th>height</th><th>Drop</th></tr>
+      {% for a in answers %}
+      {% set i = loop.index0 %}
+      <tr>
+        <td>{{ a.id }}</td>
+        <td>{{ a.question }}{% if a.confidence != 'high' %}<br><span class="{{ a.confidence }}">{{ a.confidence }} confidence: double-check</span>{% endif %}{% if a.kind == 'circle' %}<br><em>circled</em>{% endif %}</td>
+        <td><input type="text" name="answer_{{ i }}" value="{{ a.answer }}"></td>
+        <td><input type="number" step="0.5" name="x_{{ i }}" value="{{ '%.1f'|format(a.box[0]) }}"></td>
+        <td><input type="number" step="0.5" name="y_{{ i }}" value="{{ '%.1f'|format(a.box[1]) }}"></td>
+        <td><input type="number" step="0.5" name="w_{{ i }}" value="{{ '%.1f'|format(a.box[2]) }}"></td>
+        <td><input type="number" step="0.5" name="h_{{ i }}" value="{{ '%.1f'|format(a.box[3]) }}"></td>
+        <td><input type="checkbox" name="delete_{{ i }}" value="1" aria-label="Don't write question {{ a.id }}"></td>
+      </tr>
+      {% endfor %}
+    </table>
+    <div class="grid" style="margin-top:1rem">
+      <div><label>Letter height (mm, shrinks to fit)</label><input type="number" step="0.5" min="2.5" max="12" name="size" value="5"></div>
+      <div><label>Variation (try another number for a different mix)</label><input type="number" name="seed" value="0"></div>
+      <div><label>&nbsp;</label><label style="color:var(--fg)"><input type="checkbox" name="fit" value="1" checked> Centre answers on the bed</label></div>
+    </div>
+    <div class="row"><button>Redraw</button><a class="btn secondary" href="/#step4">Do another sheet</a></div>
+  </form>
+</section>
+{% endblock %}

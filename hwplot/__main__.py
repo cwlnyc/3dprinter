@@ -5,6 +5,7 @@
   solve     scan a homework sheet -> answers.json (+ the flattened page)
   render    answers.json + hand.json -> preview PNG, SVG and G-code
   run       solve + render in one go
+  serve     the same steps as a web page on http://localhost:8000
 """
 from __future__ import annotations
 
@@ -90,6 +91,11 @@ def cmd_run(a):
     return cmd_render(a, flat)
 
 
+def cmd_serve(a):
+    from .web import serve
+    serve(a.port, a.workspace, open_browser=not a.no_browser)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="hwplot", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -119,6 +125,12 @@ def main(argv=None):
     s = sub.add_parser("solve"); common(s); s.set_defaults(fn=cmd_solve)
     r = sub.add_parser("render"); common(r, homework=False); render_opts(r); r.set_defaults(fn=cmd_render)
     u = sub.add_parser("run"); common(u); render_opts(u); u.set_defaults(fn=cmd_run)
+
+    v = sub.add_parser("serve")
+    v.add_argument("--port", type=int, default=8000)
+    v.add_argument("--workspace", default="workspace", help="where hand.json, printer.json and results are kept")
+    v.add_argument("--no-browser", action="store_true")
+    v.set_defaults(fn=cmd_serve)
 
     a = ap.parse_args(argv)
     rc = a.fn(a)

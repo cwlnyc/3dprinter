@@ -114,3 +114,31 @@ def generate(strokes: list[Polyline], p: Printer, align: bool = True) -> str:
         out.append(f"G0 Z{p.z_up:.2f} F{p.feed_z}")
     out += p.end.format(**asdict(p)).splitlines()
     return "\n".join(out) + "\n"
+
+
+def test_pattern(p: Printer, size: float = 30.0) -> str:
+    """A square with a cross through it, centred on the bed.
+
+    Run this with a scrap sheet down before anything else. Faint or broken lines
+    mean z_down is too high; a gouged or wobbly line means it is too low.
+    """
+    cx, cy = p.bed_x / 2, p.bed_y / 2
+    h = size / 2
+    # Expressed in pen positions on the bed, converted to nozzle positions.
+    lines = [
+        [(cx - h, cy - h), (cx + h, cy - h), (cx + h, cy + h), (cx - h, cy + h), (cx - h, cy - h)],
+        [(cx - h, cy), (cx + h, cy)],
+        [(cx, cy - h), (cx, cy + h)],
+    ]
+    out = ["; homework-plotter test pattern: 30 mm square and cross at bed centre"]
+    out += p.start.format(**asdict(p)).splitlines()
+    out.append(f"G0 Z{p.z_up + 10:.2f} F{p.feed_z}")
+    for line in lines:
+        x, y = line[0]
+        out.append(f"G0 X{x - p.pen_offset_x:.2f} Y{y - p.pen_offset_y:.2f} F{p.feed_travel}")
+        out.append(f"G1 Z{p.z_down:.2f} F{p.feed_z}")
+        for x, y in line[1:]:
+            out.append(f"G1 X{x - p.pen_offset_x:.2f} Y{y - p.pen_offset_y:.2f} F{p.feed_draw}")
+        out.append(f"G0 Z{p.z_up:.2f} F{p.feed_z}")
+    out += p.end.format(**asdict(p)).splitlines()
+    return "\n".join(out) + "\n"

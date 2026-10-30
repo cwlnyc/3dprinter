@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Homework Plotter</title>
+<style>
+  :root { --ink:#1a2a8c; --fg:#1d1d1f; --muted:#6b6b70; --line:#e3e3e8; --bg:#fafafa; --ok:#1d7a3a; --warn:#9a6700; --err:#b42318; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.55 system-ui, -apple-system, Segoe UI, sans-serif; color:var(--fg); background:var(--bg); }
+  header { background:#fff; border-bottom:1px solid var(--line); }
+  header .wrap { display:flex; align-items:baseline; gap:1rem; padding:1rem 1.25rem; }
+  header h1 { font-size:1.15rem; margin:0; }
+  header nav { display:flex; gap:1rem; flex-wrap:wrap; font-size:.9rem; }
+  .wrap { max-width:980px; margin:0 auto; padding:0 1.25rem; }
+  main { padding:1.5rem 0 4rem; }
+  section.step { background:#fff; border:1px solid var(--line); border-radius:12px; padding:1.25rem 1.5rem; margin:0 0 1.25rem; }
+  .step h2 { margin:0 0 .25rem; font-size:1.25rem; display:flex; align-items:center; gap:.6rem; }
+  .num { display:inline-grid; place-items:center; width:1.8rem; height:1.8rem; border-radius:50%; background:var(--fg); color:#fff; font-size:.9rem; }
+  .done .num { background:var(--ok); }
+  .lead { color:var(--muted); margin:.1rem 0 1rem; }
+  ol, ul { padding-left:1.3rem; } li { margin:.25rem 0; }
+  a { color:var(--ink); }
+  .btn, button { display:inline-block; font:inherit; font-weight:600; padding:.55rem 1rem; border-radius:8px; border:1px solid var(--fg); background:var(--fg); color:#fff; text-decoration:none; cursor:pointer; }
+  .btn.secondary, button.secondary { background:#fff; color:var(--fg); }
+  .row { display:flex; flex-wrap:wrap; gap:.75rem; align-items:center; margin:.75rem 0; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:.75rem 1rem; }
+  label { display:block; font-size:.85rem; color:var(--muted); }
+  input[type=text], input[type=number], input[type=password], select, textarea { font:inherit; width:100%; padding:.45rem .6rem; border:1px solid #cfcfd6; border-radius:7px; background:#fff; color:var(--fg); }
+  textarea { font-family:ui-monospace, monospace; font-size:.85rem; }
+  .flash { padding:.6rem .9rem; border-radius:8px; margin:0 0 .6rem; border:1px solid; }
+  .flash.ok { color:var(--ok); background:#eefaf1; } .flash.warn { color:var(--warn); background:#fff8e6; } .flash.error { color:var(--err); background:#fdf0ef; }
+  .note { background:#f4f5fb; border-left:3px solid var(--ink); padding:.6rem .9rem; border-radius:0 8px 8px 0; margin:.9rem 0; }
+  .two { display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem; } @media (max-width:760px){ .two { grid-template-columns:1fr; } }
+  img.shot { max-width:100%; border:1px solid var(--line); border-radius:8px; background:#fff; }
+  .pens { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px,1fr)); gap:.6rem; }
+  .pen { border:1px solid var(--line); border-radius:10px; padding:.7rem .9rem; }
+  .pen strong { display:block; }
+  table { border-collapse:collapse; width:100%; font-size:.92rem; } th, td { text-align:left; padding:.45rem .4rem; border-bottom:1px solid var(--line); vertical-align:top; }
+  td input[type=number] { width:4.6rem; } .low { color:var(--err); font-weight:600; } .medium { color:var(--warn); font-weight:600; }
+  code, kbd { font-family:ui-monospace, monospace; font-size:.88em; background:#f1f1f4; padding:.05rem .3rem; border-radius:4px; }
+  #busy { display:none; position:fixed; inset:0; background:rgba(255,255,255,.88); place-items:center; text-align:center; z-index:10; }
+  #busy.on { display:grid; } .spin { width:42px; height:42px; border:4px solid var(--line); border-top-color:var(--ink); border-radius:50%; animation:s 1s linear infinite; margin:0 auto 1rem; } @keyframes s { to { transform:rotate(360deg);} }
+</style>
+</head>
+<body>
+<header><div class="wrap"><h1>✏️ Homework Plotter</h1>
+<nav><a href="/#step1">1 Handwriting</a><a href="/#step2">2 Pen holder</a><a href="/#step3">3 Printer</a><a href="/#step4">4 Homework</a><a href="/results">5 Results</a></nav></div></header>
+<main class="wrap">
+{% with msgs = get_flashed_messages(with_categories=true) %}{% for cat, m in msgs %}<div class="flash {{ cat }}">{{ m }}</div>{% endfor %}{% endwith %}
+{% block body %}{% endblock %}
+</main>
+<div id="busy"><div><div class="spin"></div><strong id="busy-msg">Working…</strong><p class="lead" id="busy-sub"></p></div></div>
+<script>
+  document.querySelectorAll("form[data-busy]").forEach(f => f.addEventListener("submit", () => {
+    document.getElementById("busy-msg").textContent = f.dataset.busy;
+    document.getElementById("busy-sub").textContent = f.dataset.busySub || "";
+    document.getElementById("busy").classList.add("on");
+  }));
+</script>
+</body>
+</html>

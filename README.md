@@ -17,6 +17,20 @@ python3 -m pip install -r requirements.txt
 export ANTHROPIC_API_KEY=...   # only `solve` / `run` need it
 ```
 
+## The easy way: the local web page
+
+```bash
+python3 -m hwplot serve
+```
+
+This opens http://localhost:8000. It walks you through everything below step by
+step: what to print and photograph, which pen-holder file to print, the
+printer settings, and uploading the homework. It makes all the files there and
+lets you fix answers and redraw before printing. Everything it makes is kept in
+`workspace/`. It only listens on your own computer.
+
+The rest of this README is the same flow from the command line.
+
 ## 1. Teach it your handwriting
 
 ```bash
@@ -62,7 +76,13 @@ multiple-choice answers are circled instead of written.
 
 ### Print the pen holder
 
-`hardware/pen_holder.stl` (source: `hardware/pen_holder.scad`).
+Ready-made STLs in `hardware/stl/` (source: `hardware/pen_holder.scad`):
+
+| File | For |
+|---|---|
+| `pen_holder_8mm.stl` | pencils (hex or round), mechanical pencils |
+| `pen_holder_10mm.stl` | most ballpoint and gel pens |
+| `pen_holder_12mm.stl` | markers, chunky pens |
 
 ![pen holder](hardware/pen_holder.png)
 
@@ -70,9 +90,9 @@ It's one printed part with no springs to buy. Two thin parallel leaves let the
 pen ride up a couple of millimetres when it touches the paper, so the pressure
 stays light and even. To set it up:
 
-1. **Measure your pen's barrel** and set `pen_d` in the `.scad` (open it in
-   OpenSCAD, then use the Customizer panel), then export the STL. The included
-   STL is for a 10 mm pen.
+1. **Measure your pen's barrel** where it'll be clamped and pick the closest
+   STL. For another size, set `pen_d` in the `.scad` in OpenSCAD and export,
+   or use "Make STL" on the web page.
 2. Print it in PLA or PETG at 0.2 mm layers with no supports.
 3. Push an M3 nut into the slot on top of the clamp block, then use an M3 screw
    to grip the pen.

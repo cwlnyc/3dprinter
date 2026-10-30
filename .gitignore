@@ -4,3 +4,4 @@ printer.json
 *.pdf
 __pycache__/
 .pytest_cache/
+workspace/

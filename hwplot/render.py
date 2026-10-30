@@ -133,3 +133,23 @@ def svg(strokes: list[Polyline], page_mm, pen_mm: float = 0.5) -> str:
         f'<g fill="none" stroke="#1a2a8c" stroke-width="{pen_mm}" stroke-linecap="round" stroke-linejoin="round">\n'
         f"{paths}\n</g>\n</svg>\n"
     )
+
+
+def specimen(hand: Hand, chars: str, cols: int = 16, cell_mm: float = 9.0, cap_mm: float = 5.0) -> np.ndarray:
+    """Every learned character in a grid, so you can see what the tracer made of your writing."""
+    rows = max(1, -(-len(chars) // cols))
+    w_mm, h_mm = cols * cell_mm + 6, rows * cell_mm * 1.4 + 6
+    img = np.full((round(h_mm * PX_PER_MM), round(w_mm * PX_PER_MM), 3), 255, np.uint8)
+    rng = random.Random(0)
+    strokes: list[Polyline] = []
+    for i, ch in enumerate(chars):
+        r, c = divmod(i, cols)
+        x, y = 3 + c * cell_mm, 3 + r * cell_mm * 1.4
+        cv2.putText(img, ch, (round((x + 0.3) * PX_PER_MM), round((y + cell_mm * 1.33) * PX_PER_MM)),
+                    cv2.FONT_HERSHEY_PLAIN, 0.8, (170, 170, 170), 1, cv2.LINE_AA)
+        if hand.variants(ch):
+            strokes += write(ch, (x + 1.5, y, cell_mm - 2, cell_mm * 1.2), hand, rng, cap_mm)
+        else:
+            cv2.rectangle(img, (round(x * PX_PER_MM), round(y * PX_PER_MM)),
+                          (round((x + cell_mm - 1) * PX_PER_MM), round((y + cell_mm) * PX_PER_MM)), (60, 60, 220), 2)
+    return overlay(img, strokes)
