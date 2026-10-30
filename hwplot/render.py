@@ -1,0 +1,135 @@
+"""Laying answers out in your handwriting, as strokes in page millimetres.
+
+Variation is deliberate. Real handwriting never repeats a letter exactly, so each
+character picks one of your samples at random and is nudged slightly in size,
+slant and position. A seed keeps a given run reproducible.
+"""
+from __future__ import annotations
+
+import math
+import random
+
+import cv2
+import numpy as np
+
+from .glyphs import Hand
+from .page import PX_PER_MM, ink_mask
+from .solve import Answer
+from .strokes import Polyline, order_for_plotting
+
+MIN_CAP_MM = 2.5
+
+
+def find_writing_line(flat: np.ndarray, box) -> float | None:
+    """y (mm) of a printed underline inside the box, if there is one to write on."""
+    x, y, w, h = (round(v * PX_PER_MM) for v in box)
+    H, W = flat.shape[:2]
+    x0, y0, x1, y1 = max(0, x), max(0, y), min(W, x + w), min(H, y + h)
+    if x1 - x0 < 5 or y1 - y0 < 3:
+        return None
+    mask = ink_mask(flat[y0:y1, x0:x1]) > 0
+    runs = mask.mean(axis=1)
+    row = int(runs.argmax())
+    return (y0 + row) / PX_PER_MM if runs[row] > 0.6 else None
+
+
+def _layout_lines(text: str, hand: Hand, scale: float, space: float, gap: float, max_w: float) -> list[list[str]]:
+    def word_w(word):
+        return sum(max((g.width for g in hand.variants(c)), default=0) * scale + gap for c in word)
+
+    lines, cur, cur_w = [], [], 0.0
+    for para in text.split("\n"):
+        for word in para.split():
+            ww = word_w(word)
+            if cur and cur_w + space + ww > max_w:
+                lines.append(cur)
+                cur, cur_w = [], 0.0
+            cur_w += (space if cur else 0) + ww
+            cur.append(word)
+        lines.append(cur)
+        cur, cur_w = [], 0.0
+    return [l for l in lines if l] or [[]]
+
+
+def write(text: str, box, hand: Hand, rng: random.Random, cap_mm: float = 5.0, baseline: float | None = None) -> list[Polyline]:
+    """Strokes for text inside box (x, y, w, h mm). Shrinks to fit, down to MIN_CAP_MM."""
+    x, y, w, h = box
+    cap = min(cap_mm, h * 0.7)
+    while True:
+        scale = cap / hand.cap_height
+        space, gap, line_h = cap * 0.55, cap * 0.12, cap * 1.6
+        lines = _layout_lines(text, hand, scale, space, gap, w)
+        widest = max(
+            (sum(max((g.width for g in hand.variants(c)), default=0) * scale + gap for c in " ".join(l)) for l in lines),
+            default=0,
+        )
+        if (len(lines) * line_h <= h + cap * 0.3 and widest <= w) or cap <= MIN_CAP_MM:
+            break
+        cap *= 0.9
+
+    first_base = baseline - cap * 0.15 if baseline is not None and len(lines) == 1 else y + cap * 1.15
+    slant = math.radians(rng.uniform(-3, 3))
+    out: list[Polyline] = []
+    for i, line in enumerate(lines):
+        pen_x = x + rng.uniform(0, cap * 0.2)
+        base = first_base + i * line_h
+        for j, word in enumerate(line):
+            if j:
+                pen_x += space * rng.uniform(0.85, 1.15)
+            for ch in word:
+                g = hand.pick(ch, rng)
+                if g is None:
+                    continue
+                s = scale * rng.uniform(0.95, 1.05)
+                dy = rng.gauss(0, cap * 0.03)
+                for stroke in g.strokes:
+                    out.append([(pen_x + px * s - py * s * math.tan(slant), base + dy + py * s) for px, py in stroke])
+                pen_x += g.width * s + gap * rng.uniform(0.8, 1.2)
+    return out
+
+
+def circle(box, rng: random.Random) -> list[Polyline]:
+    """A hand-drawn loop around a multiple-choice option: slightly oversized, overlapping at the end."""
+    x, y, w, h = box
+    cx, cy, rx, ry = x + w / 2, y + h / 2, w / 2 + 1.5, h / 2 + 1.2
+    start = rng.uniform(0, 2 * math.pi)
+    pts = []
+    for k in range(73):
+        t = start + 2.15 * math.pi * k / 72
+        wobble = 1 + 0.03 * math.sin(3 * t + start)
+        pts.append((cx + rx * wobble * math.cos(t), cy + ry * wobble * math.sin(t)))
+    return [pts]
+
+
+def render_answers(answers: list[Answer], hand: Hand, flat: np.ndarray | None = None, seed: int = 0, cap_mm: float = 5.0) -> list[Polyline]:
+    rng = random.Random(seed)
+    strokes: list[Polyline] = []
+    for a in answers:
+        if a.kind == "circle":
+            strokes += circle(a.box, rng)
+        else:
+            line = find_writing_line(flat, a.box) if flat is not None else None
+            strokes += write(a.answer, a.box, hand, rng, cap_mm, baseline=line)
+    return order_for_plotting(strokes)
+
+
+def overlay(flat: np.ndarray, strokes: list[Polyline], pen_mm: float = 0.5) -> np.ndarray:
+    """The homework sheet with the answers drawn on, as the plotter would leave it."""
+    out = flat.copy()
+    thick = max(1, round(pen_mm * PX_PER_MM))
+    for s in strokes:
+        pts = (np.array(s) * PX_PER_MM).round().astype(np.int32).reshape(-1, 1, 2)
+        cv2.polylines(out, [pts], False, (140, 40, 20), thick, cv2.LINE_AA)
+    return out
+
+
+def svg(strokes: list[Polyline], page_mm, pen_mm: float = 0.5) -> str:
+    w, h = page_mm
+    paths = "\n".join(
+        '<path d="M' + " L".join(f"{x:.2f},{y:.2f}" for x, y in s) + '"/>' for s in strokes if s
+    )
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}mm" height="{h}mm" viewBox="0 0 {w} {h}">\n'
+        f'<g fill="none" stroke="#1a2a8c" stroke-width="{pen_mm}" stroke-linecap="round" stroke-linejoin="round">\n'
+        f"{paths}\n</g>\n</svg>\n"
+    )

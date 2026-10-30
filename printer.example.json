@@ -1,0 +1,16 @@
+{
+  "bed_x": 220.0,
+  "bed_y": 220.0,
+  "paper_x": 0.0,
+  "paper_y": 279.4,
+  "pen_offset_x": 0.0,
+  "pen_offset_y": 42.0,
+  "z_down": 1.0,
+  "z_up": 4.0,
+  "feed_draw": 1500,
+  "feed_travel": 6000,
+  "feed_z": 900,
+  "start": "G28\nG90\nG21",
+  "pause": "M0",
+  "end": "G0 Z15 F900\nG0 X0 Y{bed_y} F6000\nM84"
+}
