@@ -97,8 +97,10 @@ stays light and even. To set it up:
 2. Print it in PLA or PETG at 0.2 mm layers with no supports.
 3. Push an M3 nut into the slot on top of the clamp block, then use an M3 screw
    to grip the pen.
-4. Bolt the plate to your toolhead (the fan shroud or carriage) with two M3
-   screws. The slots fit any hole spacing from 22 to 44 mm.
+4. Bolt the plate to your toolhead with two screws through the slots. The
+   slots fit any hole spacing from 22 to 44 mm, and the plate is only 1.5 mm
+   thick under each screw head, so the screws already holding a cover on the
+   print head are usually long enough to reuse.
 5. Slide the pen down so its tip sits **about 2 mm below the nozzle**. That
    gives the pen first contact, and the flexure absorbs homing.
 

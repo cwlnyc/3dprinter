@@ -36,6 +36,10 @@ standoff     = 12;    // gap from plate to flexure frame (clears fans, hoses)
 m3           = 3.4;
 m3_nut_af    = 5.7;   // across flats, with clearance
 m3_nut_t     = 2.6;
+// Reusing the printer's own screws: the plate is only this thick under each
+// screw head, so a screw that held the cover alone still reaches far enough.
+screw_seat   = 1.5;   // set to plate_t for a plain plate and longer screws
+head_d       = 6.4;   // screw head diameter plus clearance
 
 $fn = 64;
 
@@ -57,6 +61,10 @@ module mount_plate() {
         for (s = [-1, 1])
             translate([s * (slot_min + slot_max) / 4, plate_t/2, slot_z])
                 rotate([90, 0, 0]) slot((slot_max - slot_min) / 2, m3);
+        // pockets for the screw heads, from the outer face, leaving screw_seat of plate
+        for (s = [-1, 1])
+            translate([s * (slot_min + slot_max) / 4, plate_t + 25 - (plate_t - screw_seat), slot_z])
+                rotate([90, 0, 0]) slot((slot_max - slot_min) / 2, head_d);
     }
 }
 
