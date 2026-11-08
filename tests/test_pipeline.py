@@ -120,3 +120,28 @@ def test_underline_is_used_as_the_writing_line():
     cv2.line(flat, (60, 300), (300, 300), (0, 0, 0), 2)
     y = render.find_writing_line(flat, (8.0, 40.0, 45.0, 15.0))
     assert y is not None and abs(y - 300 / page.PX_PER_MM) < 0.5
+
+
+def test_fit_centres_the_pen_not_the_nozzle_when_the_pen_is_beside_it(hand):
+    h, _ = hand
+    answers = [Answer("1", "q", "84", "write", (100.0, 100.0, 20.0, 10.0), "high")]
+    strokes = render.render_answers(answers, h)
+    # Holder on the right side of the print head: pen 62 mm right of the nozzle.
+    p = fit_paper(strokes, Printer(pen_offset_x=62.0))
+    pen_xs = [p.paper_x + x for s in strokes for x, _ in s]
+    middle = (min(pen_xs) + max(pen_xs)) / 2
+    assert abs(middle - (62 + 220) / 2) < 0.2  # middle of the strip the pen can reach
+    code = generate(strokes, p)
+    for line in code.splitlines():
+        if line.startswith(("G0 X", "G1 X")):
+            x = float(line.split()[1][1:])
+            assert 0 <= x <= p.bed_x
+
+
+def test_pen_never_writes_off_the_edge_of_the_bed(hand):
+    h, _ = hand
+    answers = [Answer("1", "q", "84", "write", (100.0, 100.0, 20.0, 10.0), "high")]
+    strokes = render.render_answers(answers, h)
+    # Nozzle could reach, but the pen would be out past the bed's right edge.
+    with pytest.raises(OutOfReach):
+        generate(strokes, Printer(pen_offset_x=62.0, paper_x=125.0, paper_y=200.0))

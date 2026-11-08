@@ -51,25 +51,42 @@ class OutOfReach(ValueError):
     pass
 
 
+def pen_range(p: Printer) -> tuple[tuple[float, float], tuple[float, float]]:
+    """Where on the bed the pen can write: under the pen's travel AND over the bed.
+
+    The pen sits beside the nozzle, so its travel is the nozzle's shifted by the
+    offset. Past the bed's edge the paper hangs in the air with nothing to press
+    against, so those spots do not count either.
+    """
+    x0, x1 = max(0.0, p.pen_offset_x), min(p.bed_x, p.bed_x + p.pen_offset_x)
+    y0, y1 = max(0.0, p.pen_offset_y), min(p.bed_y, p.bed_y + p.pen_offset_y)
+    return (x0, x1), (y0, y1)
+
+
+def _pen_points(strokes: list[Polyline], p: Printer) -> list[tuple[float, float]]:
+    return [(p.paper_x + x, p.paper_y - y) for s in strokes for x, y in s]
+
+
 def check_reach(strokes: list[Polyline], p: Printer) -> None:
-    pts = [p.to_bed(x, y) for s in strokes for x, y in s]
+    pts = _pen_points(strokes, p)
     if not pts:
         return
     xs, ys = [a for a, _ in pts], [b for _, b in pts]
+    (x0, x1), (y0, y1) = pen_range(p)
     bad = []
-    if min(xs) < 0 or max(xs) > p.bed_x:
-        bad.append(f"X {min(xs):.0f}..{max(xs):.0f} (bed 0..{p.bed_x:.0f})")
-    if min(ys) < 0 or max(ys) > p.bed_y:
-        bad.append(f"Y {min(ys):.0f}..{max(ys):.0f} (bed 0..{p.bed_y:.0f})")
+    if min(xs) < x0 - 1e-6 or max(xs) > x1 + 1e-6:
+        bad.append(f"X {min(xs):.0f}..{max(xs):.0f} (pen can write {x0:.0f}..{x1:.0f})")
+    if min(ys) < y0 - 1e-6 or max(ys) > y1 + 1e-6:
+        bad.append(f"Y {min(ys):.0f}..{max(ys):.0f} (pen can write {y0:.0f}..{y1:.0f})")
     if bad:
         raise OutOfReach(
-            "answers fall outside what the printer can reach: " + "; ".join(bad)
+            "answers fall outside where the pen can write: " + "; ".join(bad)
             + ". Move the paper (paper_x / paper_y) or use --fit."
         )
 
 
 def fit_paper(strokes: list[Polyline], p: Printer) -> Printer:
-    """Choose paper_x / paper_y so the answers sit in the middle of the bed.
+    """Choose paper_x / paper_y so the answers sit in the middle of where the pen can write.
 
     A Letter page is taller than most beds, so the page usually overhangs. That
     is fine: only the parts with answers need to be under the pen.
@@ -79,9 +96,10 @@ def fit_paper(strokes: list[Polyline], p: Printer) -> Printer:
     if not xs:
         return p
     cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
+    (x0, x1), (y0, y1) = pen_range(p)
     q = Printer(**asdict(p))
-    q.paper_x = round(p.bed_x / 2 - cx + p.pen_offset_x, 1)
-    q.paper_y = round(p.bed_y / 2 + cy + p.pen_offset_y, 1)
+    q.paper_x = round((x0 + x1) / 2 - cx, 1)
+    q.paper_y = round((y0 + y1) / 2 + cy, 1)
     return q
 
 
