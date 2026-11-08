@@ -83,6 +83,7 @@ Ready-made STLs in `hardware/stl/` (source: `hardware/pen_holder.scad`):
 | `pen_holder_8mm.stl` | pencils (hex or round), mechanical pencils |
 | `pen_holder_10mm.stl` | most ballpoint and gel pens |
 | `pen_holder_12mm.stl` | markers, chunky pens |
+| `pen_holder_pilot_g2.stl` | Pilot G2 gel pens: an 11.0 mm hole sized for its 10.5 mm rubber grip |
 
 ![pen holder](hardware/pen_holder.png)
 

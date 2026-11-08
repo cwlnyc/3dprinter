@@ -42,7 +42,7 @@
       <p><strong>Pick the file for what you're writing with.</strong> Measure the barrel with a ruler where it'll be clamped (about 3 cm up from the tip).</p>
       <div class="pens">
         {% for size, label in pen_sizes.items() %}
-        <a class="pen" href="/hardware/pen_holder_{{ size }}mm.stl"><strong>{{ size }} mm STL</strong>{{ label }}</a>
+        <a class="pen" href="/hardware/pen_holder_{{ size }}.stl"><strong>{{ label }}</strong>{{ size }}.stl</a>
         {% endfor %}
       </div>
       {% if openscad %}

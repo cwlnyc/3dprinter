@@ -26,7 +26,7 @@ from .glyphs import Hand, learn
 
 ROOT = Path(__file__).resolve().parents[1]
 HARDWARE = ROOT / "hardware"
-PEN_SIZES = {"8": "Pencil (8 mm, hex or round)", "10": "Most ballpoint / gel pens (10 mm)", "12": "Markers, chunky pens (12 mm)"}
+PEN_SIZES = {"8mm": "Pencil (8 mm, hex or round)", "10mm": "Most ballpoint pens (10 mm)", "12mm": "Markers, chunky pens (12 mm)", "pilot_g2": "Pilot G2 gel pen (fits its 10.5 mm grip)"}
 
 
 def create_app(workspace: str | os.PathLike = "workspace") -> Flask:
@@ -130,11 +130,11 @@ def create_app(workspace: str | os.PathLike = "workspace") -> Flask:
         ok, buf = cv2.imencode(".png", render.specimen(hand, template.CHARSET))
         return send_file(io.BytesIO(buf.tobytes()), mimetype="image/png")
 
-    @app.get("/hardware/pen_holder_<size>mm.stl")
+    @app.get("/hardware/pen_holder_<size>.stl")
     def stl(size):
         if size not in PEN_SIZES:
             abort(404)
-        return send_file(HARDWARE / "stl" / f"pen_holder_{size}mm.stl", as_attachment=True)
+        return send_file(HARDWARE / "stl" / f"pen_holder_{size}.stl", as_attachment=True)
 
     @app.post("/hardware/custom.stl")
     def custom_stl():
