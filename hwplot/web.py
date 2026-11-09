@@ -23,7 +23,7 @@ import numpy as np
 from flask import Flask, abort, flash, redirect, render_template, request, send_file, url_for
 
 from . import blanks, page, render, solve, template
-from .gcode import OutOfReach, Printer, fit_paper, generate, test_pattern
+from .gcode import OutOfReach, Printer, fit_paper, generate, place, test_pattern
 from .glyphs import Hand, learn
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -166,12 +166,13 @@ def create_app(workspace: str | os.PathLike = "workspace") -> Flask:
         strokes = render.render_answers(answers, hand, flat, seed=seed, cap_mm=size)
         cv2.imwrite(str(out / "preview.png"), render.overlay(flat, strokes))
         (out / "answers.svg").write_text(render.svg(strokes, page_mm()))
-        p = load_printer()
-        if fit:
-            p = fit_paper(strokes, p, page_w=page_mm()[0])
+        p, align = load_printer(), True
+        if fit or p.jig:  # with the jig the sheet's spot is fixed, so there's nothing to fit
+            p, align = place(strokes, p, page_w=page_mm()[0])
         try:
-            (out / "answers.gcode").write_text(generate(strokes, p, marks=render.alignment_marks(answers)))
-            (out / "placement.txt").write_text(f"{p.paper_x} {p.paper_y} {'flipped' if p.paper_flipped else 'upright'}")
+            (out / "answers.gcode").write_text(generate(strokes, p, align=align, marks=render.alignment_marks(answers)))
+            how = "jig" if p.jig else ("flipped" if p.paper_flipped else "upright")
+            (out / "placement.txt").write_text(f"{p.paper_x} {p.paper_y} {how}")
         except OutOfReach as e:
             (out / "answers.gcode").unlink(missing_ok=True)
             msgs.append(f"G-code not made: {e}")
@@ -426,7 +427,7 @@ def create_app(workspace: str | os.PathLike = "workspace") -> Flask:
         if placement:
             pr = load_printer()
             where = describe_corner(float(placement[0]), float(placement[1]),
-                                    len(placement) > 2 and placement[2] == "flipped", pr.bed_x, pr.bed_y)
+                                    len(placement) > 2 and placement[2] in ("flipped", "jig"), pr.bed_x, pr.bed_y)
         return render_template("results.html", answers=answers, notes=notes, placement=placement, where=where,
                                has_gcode=(out / "answers.gcode").exists(), v=int((out / "preview.png").stat().st_mtime))
 

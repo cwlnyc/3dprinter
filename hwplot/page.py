@@ -48,9 +48,10 @@ def find_page(img: np.ndarray) -> np.ndarray | None:
     return None
 
 
-def flatten(img: np.ndarray, page_mm=LETTER_MM, corners: np.ndarray | None = None) -> np.ndarray:
-    """Warp the sheet to a top-down image of exactly page_mm at PX_PER_MM."""
-    w, h = int(page_mm[0] * PX_PER_MM), int(page_mm[1] * PX_PER_MM)
+def flatten(img: np.ndarray, page_mm=LETTER_MM, corners: np.ndarray | None = None,
+            scale: float = PX_PER_MM) -> np.ndarray:
+    """Warp the sheet to a top-down image of exactly page_mm at scale px/mm (PX_PER_MM by default)."""
+    w, h = int(page_mm[0] * scale), int(page_mm[1] * scale)
     if corners is None:
         corners = find_page(img)
     if corners is None:

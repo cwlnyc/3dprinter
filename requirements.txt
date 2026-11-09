@@ -5,3 +5,6 @@ scikit-image>=0.22
 pillow>=10
 flask>=3
 pytest>=8
+mcp>=2.3,<3
+pyserial>=3.5
+uvicorn>=0.30

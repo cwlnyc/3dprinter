@@ -18,6 +18,10 @@
       <h3>Printing</h3>
       <ol>
         <li>Put the G-code on the printer's SD card (or send it with OctoPrint / Mainsail).</li>
+        {% if placement|length > 2 and placement[2] == 'jig' %}
+        <li><strong>Slide the sheet into the jig:</strong> face up, turned round (title towards you). Its top edge against the jig's front lip, its left edge (on your right) against the side wall. Open the binder clip on the jig's corner and let it close on the sheet; that holds it, no tape needed.</li>
+        <li>Start the print. It homes and goes straight to writing: no stops.</li>
+        {% else %}
         {% if placement|length > 2 and placement[2] == 'flipped' %}
         <li><strong>Turn the sheet round:</strong> face up, with its <strong>title (top edge) towards the front</strong> of the printer, so the page's top-left corner is at the front right. The pen only reaches the right part of the bed, and this way round the blank side of the page lies on the bed instead of hanging off the side into the frame.</li>
         {% else %}
@@ -31,6 +35,7 @@
             <li><strong>"Left edge under pen"</strong> or <strong>"Turn: blank …"</strong>: without moving the first spot, turn the paper slightly until that edge or answer line is under the pen tip. (It means the page's own left edge, which is on your right when the sheet is turned round.) That squares it up. Tape it down, then press the knob.</li>
           </ul>
         </li>
+        {% endif %}
         <li>Stay nearby for the first few letters.</li>
       </ol>
       {% elif not has_gcode %}

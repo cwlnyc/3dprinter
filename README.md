@@ -168,6 +168,56 @@ than driving the head into the frame.
 - Bambu printers don't take raw G-code jobs the same way. This targets Marlin
   and Klipper machines (Ender, Prusa, Voron and similar).
 
+## The Claude connector: send a photo, get it printed
+
+`python3 -m hwplot mcp` lets Claude, in any chat including on your phone, get
+the homework photo from your Mac, solve it, and print it. Claude does the
+solving in the chat, so it uses your Claude plan and **no API credits**.
+
+**Every time:** save the homework photo into `workspace/photos/` (an iCloud
+Drive folder works well: pass it with `--photos`), put the sheet in the jig, and
+tell Claude "do my homework". Claude shows you the preview before it prints.
+
+**Setup, once:**
+
+1. Install and start the connector (leave it running):
+   ```bash
+   python3 -m pip install -r requirements.txt
+   ```
+   ```bash
+   python3 -m hwplot mcp --photos ~/Library/Mobile\ Documents/com~apple~CloudDocs/Homework
+   ```
+   It prints a URL ending in `/<secret>/mcp`. **Keep it private:** anyone
+   with it can print on your printer.
+2. Give it a public address with a Cloudflare tunnel, in a second terminal:
+   ```bash
+   brew install cloudflared
+   ```
+   ```bash
+   cloudflared tunnel --url http://localhost:8765
+   ```
+   It shows an address like `https://something.trycloudflare.com`. This quick
+   tunnel gets a new address every time it starts. For one that never changes,
+   use a named Cloudflare tunnel on a domain you have on Cloudflare.
+3. In Claude: **Settings → Connectors → Add custom connector**. Paste the
+   tunnel address followed by `/<secret>/mcp`.
+4. Plug the printer into the Mac with USB. Without it, the connector saves the
+   G-code for the SD card instead.
+
+### The paper jig
+
+`hardware/stl/paper_jig.stl` is a tray that clips onto the front-right corner of
+the glass with the binder clip already there. The sheet goes turned round
+(title towards you): its top edge against the front lip, its left edge against
+the side wall, and the clip holds it. No tape and no lining up.
+
+Once it's fitted, ask Claude to run the jig setup (`jig_test_print`, then
+`jig_calibrate`). The printer draws two crosses, you measure where they landed
+with a ruler, and the software learns exactly where the jig sits. After that,
+every print skips the alignment stops. In the jig the pen reaches roughly 1–15
+cm from the page's left edge and 4.5–25 cm from its top. Answers outside that
+are flagged rather than printed.
+
 ## Tests
 
 ```bash

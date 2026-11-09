@@ -7,6 +7,7 @@
   run       solve + render in one go
   serve     the same steps as a web page on http://localhost:8000
   blanks    flatten a homework photo and list its answer lines and boxes, numbered
+  mcp       the Claude connector: Claude gets the photo, solves it and prints, from any chat
 """
 from __future__ import annotations
 
@@ -120,6 +121,11 @@ def cmd_blanks(a):
     print(f"{len(found)} blank(s); page.png and {path} written")
 
 
+def cmd_mcp(a):
+    from .connector import run
+    run(a.workspace, a.photos, a.port, a.serial)
+
+
 def cmd_serve(a):
     from .web import serve
     serve(a.port, a.workspace, open_browser=not a.no_browser)
@@ -164,6 +170,13 @@ def main(argv=None):
     b.add_argument("--out-dir", default="out")
     b.add_argument("--paper", choices=["letter", "a4"], default="letter")
     b.set_defaults(fn=cmd_blanks)
+
+    m = sub.add_parser("mcp")
+    m.add_argument("--workspace", default="workspace")
+    m.add_argument("--photos", default="", help="folder the homework photos are saved to (default: workspace/photos)")
+    m.add_argument("--port", type=int, default=8765)
+    m.add_argument("--serial", default="", help="printer's USB port, if it isn't found by itself")
+    m.set_defaults(fn=cmd_mcp)
 
     v = sub.add_parser("serve")
     v.add_argument("--port", type=int, default=8000)

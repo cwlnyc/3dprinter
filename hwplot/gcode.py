@@ -25,6 +25,13 @@ class Printer:
     paper_x: float = 0.0
     paper_y: float = 279.4
     paper_flipped: bool = False
+    # A paper jig (hardware/paper_jig.scad) clipped to the bed's front-right
+    # corner puts every sheet in the same place, turned round. With it on, that
+    # fixed spot is used and no alignment stops are needed. jig_x / jig_y are
+    # where the page's top-left corner lands, as measured by jig_calibrate.
+    jig: bool = False
+    jig_x: float = 228.0
+    jig_y: float = -45.0
     # Pen tip minus nozzle position. Measure: draw a dot, compare to the nozzle.
     pen_offset_x: float = 0.0
     pen_offset_y: float = 0.0
@@ -215,6 +222,55 @@ def alignment(p: Printer, marks: list[Mark] | None = None) -> list[str]:
         out += ["; nothing on the sheet is in the pen's reach to line up against: place it by measurement",
                 *_say(p, "Place paper, click")]
     return out
+
+
+def place(strokes: list[Polyline], p: Printer, page_w: float = 215.9) -> tuple[Printer, bool]:
+    """Where this sheet goes, and whether the G-code should stop to line it up.
+
+    With the jig it always goes in the jig, so nothing needs lining up.
+    """
+    if p.jig:
+        q = Printer(**asdict(p))
+        q.paper_x, q.paper_y, q.paper_flipped = p.jig_x, p.jig_y, True
+        return q, False
+    return fit_paper(strokes, p, page_w=page_w), True
+
+
+def jig_reach(p: Printer) -> tuple[tuple[float, float], tuple[float, float]]:
+    """The part of the page (page mm) the pen can write on when the sheet is in the jig."""
+    (x0, x1), (y0, y1) = pen_range(p)
+    # turned round: pen X = jig_x - x, pen Y = jig_y + y
+    return (p.jig_x - x1, p.jig_x - x0), (y0 - p.jig_y, y1 - p.jig_y)
+
+
+JIG_TEST_MARKS = ((40.0, 80.0), (120.0, 190.0))  # page mm, both well inside the jig's reach
+
+
+def jig_test(p: Printer) -> str:
+    """G-code drawing two small crosses on a sheet in the jig, for jig_calibrate to measure."""
+    q = Printer(**asdict(p))
+    q.paper_x, q.paper_y, q.paper_flipped = p.jig_x, p.jig_y, True
+    arm = 4.0
+    strokes = []
+    for x, y in JIG_TEST_MARKS:
+        strokes += [[(x - arm, y), (x + arm, y)], [(x, y - arm), (x, y + arm)]]
+    return generate(strokes, q, align=False)
+
+
+def jig_calibrate(p: Printer, measured: list[tuple[float, float]]) -> Printer:
+    """Correct the jig's position from where jig_test's crosses actually landed.
+
+    measured: for each cross, its distance (mm) from the page's left edge and
+    from its top edge, read with a ruler on the sheet the right way up.
+    """
+    q = Printer(**asdict(p))
+    dx = [mx - x for (x, _), (mx, _) in zip(JIG_TEST_MARKS, measured)]
+    dy = [my - y for (_, y), (_, my) in zip(JIG_TEST_MARKS, measured)]
+    # turned round, a cross drawn at bed X = jig_x - x lands at page x = true_x - (jig_x - x)
+    q.jig_x = round(p.jig_x + sum(dx) / len(dx), 1)
+    # and at bed Y = jig_y + y lands at page y = (jig_y + y) - true_y
+    q.jig_y = round(p.jig_y - sum(dy) / len(dy), 1)
+    return q
 
 
 def generate(strokes: list[Polyline], p: Printer, align: bool = True, marks: list[Mark] | None = None) -> str:

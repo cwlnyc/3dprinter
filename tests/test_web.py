@@ -188,3 +188,18 @@ def test_paper_placement_is_described_in_words():
     assert t == "The page's top-left corner (its corner nearest you on the right) goes at the bed's right edge, hanging 3.3 cm off the front."
     t = describe_corner(80.3, 205.8, False, 220, 220)
     assert "8 cm in from the bed's left edge" in t and "1.4 cm in from the back edge" in t
+
+
+def test_with_the_jig_the_page_says_slide_it_in_and_the_print_has_no_stops(client, tmp_path):
+    pages = [(png(photographed(filled_page(p))), f"p{p}.jpg") for p in range(template.page_count())]
+    client.post("/learn", data={"scans": pages}, content_type="multipart/form-data")
+    from hwplot.gcode import Printer
+    ws = tmp_path  # the client fixture's workspace is tmp_path
+    Printer(pen_offset_x=77.9, pen_offset_y=-12.2, z_down=1.7, z_up=4.7, jig=True).save(str(ws / "printer.json"))
+    path = tmp_path / "answers.json"
+    solve_mod.save(str(path), [Answer("1", "q", "A", "write", (60.0, 100.0, 6.0, 4.4), "high", "line")], "")
+    r = client.post("/import", data={"homework": (png(filled_page(0)), "hw.jpg"),
+                                     "answers": (io.BytesIO(path.read_bytes()), "answers.json")},
+                    content_type="multipart/form-data", follow_redirects=True)
+    assert b"Slide the sheet into the jig" in r.data
+    assert "M0" not in client.get("/out/answers.gcode").data.decode()
