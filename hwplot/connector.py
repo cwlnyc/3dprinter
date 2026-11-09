@@ -298,8 +298,10 @@ def _save_config(path: Path, data: dict) -> None:
 def secret(workspace: str | os.PathLike) -> str:
     """The URL secret, made once and kept, so the connector's address stays the same."""
     path, data = _config(workspace)
-    if not data.get("secret"):
-        data["secret"] = secrets.token_urlsafe(24)
+    if not data.get("secret") or not data.get("relay_project"):
+        # Settings saved before the .pages.dev front door existed have a secret but
+        # no site name: keep the secret (the connector URL stays the same), add the name.
+        data.setdefault("secret", secrets.token_urlsafe(24))
         data.setdefault("relay_project", "hwplot-" + secrets.token_hex(3))
         _save_config(path, data)
     return data["secret"]

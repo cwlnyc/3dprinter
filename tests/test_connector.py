@@ -188,3 +188,9 @@ def test_the_secret_comes_with_a_name_for_the_front_door(tmp_path):
     connector.secret(tmp_path)
     data = json.loads((tmp_path / "connector.json").read_text())
     assert data["relay_project"].startswith("hwplot-")
+
+
+def test_settings_from_before_the_front_door_get_a_site_name_and_keep_their_secret(tmp_path):
+    (tmp_path / "connector.json").write_text(json.dumps({"secret": "old-secret-kept"}))
+    assert connector.secret(tmp_path) == "old-secret-kept"
+    assert json.loads((tmp_path / "connector.json").read_text())["relay_project"].startswith("hwplot-")
