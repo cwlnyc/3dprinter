@@ -396,6 +396,8 @@ def run(workspace: str = "workspace", photos: str = "", port: int = 8765, serial
         transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
     )
 
+    app = _logged(app, key)
+
     tunnel = None
     if relay:
         binary = find_cloudflared()
@@ -424,6 +426,44 @@ def run(workspace: str = "workspace", photos: str = "", port: int = 8765, serial
     finally:
         if tunnel:
             tunnel.terminate()
+
+
+def _logged(app, key: str):
+    """Print one line per request (method, path, status, client), with the secret blanked.
+
+    When Claude can't connect, this shows whether its requests reach the Mac at all,
+    and what the connector answered.
+    """
+    import datetime
+
+    async def wrapper(scope, receive, send):
+        if scope.get("type") != "http":
+            return await app(scope, receive, send)
+        headers = {k.decode().lower(): v.decode(errors="replace") for k, v in scope.get("headers", [])}
+        rpc = {"name": ""}
+
+        async def receive_logged():
+            message = await receive()
+            if message.get("type") == "http.request" and not rpc["name"]:
+                try:
+                    body = json.loads(message.get("body") or b"{}")
+                    rpc["name"] = body.get("method", "") if isinstance(body, dict) else "batch"
+                except ValueError:
+                    pass
+            return message
+
+        async def send_logged(message):
+            if message.get("type") == "http.response.start":
+                when = datetime.datetime.now().strftime("%H:%M:%S")
+                path = scope.get("path", "").replace(key, "<secret>")
+                agent = headers.get("user-agent", "-")[:40]
+                print(f"{when} {scope.get('method')} {path} {rpc['name']} -> {message.get('status')}  ({agent})",
+                      flush=True)
+            await send(message)
+
+        return await app(scope, receive_logged, send_logged)
+
+    return wrapper
 
 
 INIT = {"jsonrpc": "2.0", "id": 1, "method": "initialize",
