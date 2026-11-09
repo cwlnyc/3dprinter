@@ -346,15 +346,24 @@ def start_tunnel(port: int, binary: str, timeout: float = 60.0):
 
 def register(relay: str, key: str, origin: str, tries: int = 6) -> None:
     """Tell the .pages.dev front door where the Mac is now."""
+    import ssl
     import urllib.request
 
+    # Python from python.org on a Mac ships without the system's trusted
+    # certificates, so every HTTPS request fails verification. certifi's bundle
+    # is the usual fix; verification stays on.
+    try:
+        import certifi
+        tls = ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        tls = ssl.create_default_context()
     body = json.dumps({"origin": origin}).encode()
     last = None
     for attempt in range(tries):
         try:
             req = urllib.request.Request(f"{relay.rstrip('/')}/{key}/register", data=body, method="POST",
                                          headers={"Content-Type": "application/json"})
-            with urllib.request.urlopen(req, timeout=15) as r:
+            with urllib.request.urlopen(req, timeout=15, context=tls) as r:
                 if r.status == 200:
                     return
         except Exception as e:  # network hiccups while the tunnel settles: retry
