@@ -1,8 +1,10 @@
 """Laying answers out in your handwriting, as strokes in page millimetres.
 
 Variation is deliberate. Real handwriting never repeats a letter exactly, so each
-character picks one of your samples at random and is nudged slightly in size,
-slant and position. A seed keeps a given run reproducible.
+character is made fresh from your samples (see Hand.make) and nudged slightly in
+size and position, each answer gets its own slant, and each line drifts a
+little up or down. How much of each is Hand.style. A seed keeps a given run
+reproducible.
 """
 from __future__ import annotations
 
@@ -57,7 +59,7 @@ def write(text: str, box, hand: Hand, rng: random.Random, cap_mm: float = 5.0, b
     cap = min(cap_mm, h * 0.7)
     while True:
         scale = cap / hand.cap_height
-        space, gap, line_h = cap * 0.55, cap * 0.12, cap * 1.6
+        space, gap, line_h = cap * hand.style.word_space, cap * hand.style.letter_gap, cap * 1.6
         lines = _layout_lines(text, hand, scale, space, gap, w)
         widest = max(
             (sum(max((g.width for g in hand.variants(c)), default=0) * scale + gap for c in " ".join(l)) for l in lines),
@@ -67,21 +69,23 @@ def write(text: str, box, hand: Hand, rng: random.Random, cap_mm: float = 5.0, b
             break
         cap *= 0.9
 
+    st = hand.style
     first_base = baseline - cap * 0.15 if baseline is not None and len(lines) == 1 else y + cap * 1.15
-    slant = math.radians(rng.uniform(-3, 3))
+    slant = math.radians(rng.uniform(-st.slant_jitter_deg, st.slant_jitter_deg))
     out: list[Polyline] = []
     for i, line in enumerate(lines):
-        pen_x = x + rng.uniform(0, cap * 0.2)
+        start_x = pen_x = x + rng.uniform(0, cap * 0.2)
         base = first_base + i * line_h
+        drift = math.tan(math.radians(rng.uniform(-st.line_drift_deg, st.line_drift_deg)))
         for j, word in enumerate(line):
             if j:
                 pen_x += space * rng.uniform(0.85, 1.15)
             for ch in word:
-                g = hand.pick(ch, rng)
+                g = hand.make(ch, rng)
                 if g is None:
                     continue
-                s = scale * rng.uniform(0.95, 1.05)
-                dy = rng.gauss(0, cap * 0.03)
+                s = scale * rng.uniform(1 - st.size_jitter, 1 + st.size_jitter)
+                dy = rng.gauss(0, cap * st.baseline_jitter) + drift * (pen_x - start_x)
                 for stroke in g.strokes:
                     out.append([(pen_x + px * s - py * s * math.tan(slant), base + dy + py * s) for px, py in stroke])
                 pen_x += g.width * s + gap * rng.uniform(0.8, 1.2)
@@ -108,7 +112,12 @@ def render_answers(answers: list[Answer], hand: Hand, flat: np.ndarray | None = 
         if a.kind == "circle":
             strokes += circle(a.box, rng)
         else:
-            line = find_writing_line(flat, a.box) if flat is not None else None
+            if a.target == "line":
+                line = a.box[1] + a.box[3]  # snapped: the box sits on the page's own line
+            elif a.target == "box":
+                line = a.box[1] + a.box[3] / 2 + min(cap_mm, a.box[3] * 0.7) / 2  # middle of the box
+            else:
+                line = find_writing_line(flat, a.box) if flat is not None else None
             strokes += write(a.answer, a.box, hand, rng, cap_mm, baseline=line)
     return order_for_plotting(strokes)
 

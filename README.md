@@ -66,6 +66,18 @@ That runs both halves. Separately:
     answers in place": you can also send it to any SVG pen plotter or Cricut.
   - `out/answers.gcode`: the job for the printer.
 
+After solving, each answer is snapped onto the sheet's own blanks: a printed
+answer line, an empty answer box, or (for multiple choice) the printed option it
+circles. Claude places boxes by eye, and the page says exactly where the lines
+are. Each blank takes one answer, and anything more than about 9 mm from a blank
+keeps Claude's box. The results page says which ones were snapped.
+
+Each letter is made fresh: two of your samples of it are blended in random
+proportions and the result is wobbled slightly, and each line drifts a little.
+So no two copies of a word are identical. `learn` adds to the samples you
+already have (use `--fresh` to start over), so filling in more sheets over time
+gives a wider range. Scanning the same page twice adds nothing.
+
 If an answer is wrong or sits in the wrong spot, edit `out/answers.json` (each
 `box` is `[x, y, width, height]` in mm from the page's top-left corner) and
 run `render` again. No new API call is needed. `--size 4` writes smaller,

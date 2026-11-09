@@ -41,7 +41,7 @@
       {% set i = loop.index0 %}
       <tr>
         <td>{{ a.id }}</td>
-        <td>{{ a.question }}{% if a.confidence != 'high' %}<br><span class="{{ a.confidence }}">{{ a.confidence }} confidence: double-check</span>{% endif %}{% if a.kind == 'circle' %}<br><em>circled</em>{% endif %}</td>
+        <td>{{ a.question }}{% if a.confidence != 'high' %}<br><span class="{{ a.confidence }}">{{ a.confidence }} confidence: double-check</span>{% endif %}{% if a.kind == 'circle' %}<br><em>circled</em>{% endif %}{% if a.target in ('line', 'box', 'option') %}<br><span style="color:var(--ok)">on the sheet's {{ {'line': 'line', 'box': 'box', 'option': 'printed option'}[a.target] }}</span>{% endif %}</td>
         <td><input type="text" name="answer_{{ i }}" value="{{ a.answer }}"></td>
         <td><input type="number" step="0.5" name="x_{{ i }}" value="{{ '%.1f'|format(a.box[0]) }}"></td>
         <td><input type="number" step="0.5" name="y_{{ i }}" value="{{ '%.1f'|format(a.box[1]) }}"></td>

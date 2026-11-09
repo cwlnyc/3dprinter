@@ -30,7 +30,7 @@ def test_whole_flow(client, monkeypatch):
 
     pages = [(png(photographed(filled_page(p))), f"p{p}.jpg") for p in range(template.page_count())]
     r = client.post("/learn", data={"scans": pages}, content_type="multipart/form-data", follow_redirects=True)
-    assert b"Learned 88 characters" in r.data
+    assert b"88 characters" in r.data and b"Added" in r.data
     assert client.get("/specimen.png").data[:4] == b"\x89PNG"
 
     r = client.post("/printer", data={"bed_x": "235", "z_down": "1.2"}, follow_redirects=True)

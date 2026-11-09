@@ -15,7 +15,7 @@ import sys
 
 import cv2
 
-from . import page, render, solve, template
+from . import blanks, page, render, solve, template
 from .gcode import OutOfReach, Printer, fit_paper, generate
 from .glyphs import Hand, learn
 
@@ -26,10 +26,12 @@ def cmd_template(a):
 
 
 def cmd_learn(a):
-    hand, warnings = learn([page.load(p) for p in a.scans])
+    existing = Hand.load(a.out) if os.path.exists(a.out) and not a.fresh else None
+    hand, warnings, added = learn([page.load(p) for p in a.scans], existing)
     hand.save(a.out)
     total = sum(len(v) for v in hand.glyphs.values())
-    print(f"learned {len(hand.glyphs)} characters ({total} samples), cap height {hand.cap_height:.1f} mm -> {a.out}")
+    print(f"added {added} new samples: {len(hand.glyphs)} characters, {total} samples in all, "
+          f"cap height {hand.cap_height:.1f} mm -> {a.out}")
     for w in warnings:
         print("warning:", w)
 
@@ -45,6 +47,9 @@ def cmd_solve(a):
     hand = Hand.load(a.hand)
     flat = _flatten(a.homework, a.out_dir, a.paper)
     answers, notes = solve.solve(flat, "".join(sorted(hand.glyphs)))
+    moved = blanks.snap(answers, flat)
+    if moved:
+        print(f"snapped {moved} answer(s) onto the sheet's own lines and boxes")
     path = os.path.join(a.out_dir, "answers.json")
     solve.save(path, answers, notes)
     for x in answers:
@@ -107,6 +112,7 @@ def main(argv=None):
     l = sub.add_parser("learn")
     l.add_argument("scans", nargs="+", help="photos or scans of the filled-in sample pages")
     l.add_argument("--out", default="hand.json")
+    l.add_argument("--fresh", action="store_true", help="start over instead of adding to the samples already in --out")
     l.set_defaults(fn=cmd_learn)
 
     def common(p, homework=True):

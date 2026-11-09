@@ -20,7 +20,7 @@ import cv2
 import numpy as np
 from flask import Flask, abort, flash, redirect, render_template, request, send_file, url_for
 
-from . import page, render, solve, template
+from . import blanks, page, render, solve, template
 from .gcode import OutOfReach, Printer, fit_paper, generate, test_pattern
 from .glyphs import Hand, learn
 
@@ -114,12 +114,15 @@ def create_app(workspace: str | os.PathLike = "workspace") -> Flask:
             flash("Choose the photos of your filled-in sample pages first.", "error")
             return redirect(url_for("index") + "#step1")
         try:
-            hand, warnings = learn([read_upload(f) for f in files])
+            existing = None if request.form.get("fresh") else load_hand()
+            hand, warnings, added = learn([read_upload(f) for f in files], existing)
         except ValueError as e:
             flash(f"Couldn't read that: {e}", "error")
             return redirect(url_for("index") + "#step1")
         hand.save(str(hand_path))
-        flash(f"Learned {len(hand.glyphs)} characters from {len(files)} photo(s). Check them below.", "ok")
+        total = sum(len(v) for v in hand.glyphs.values())
+        flash(f"Added {added} new samples from {len(files)} photo(s): {len(hand.glyphs)} characters, "
+              f"{total} samples in all. Check them below.", "ok")
         for w in warnings:
             flash(w, "warn")
         return redirect(url_for("index") + "#step1")
@@ -199,6 +202,7 @@ def create_app(workspace: str | os.PathLike = "workspace") -> Flask:
                 cv2.imwrite(str(out / "page.png"), flat)
                 import anthropic
                 answers, notes = solve.solve(flat, "".join(sorted(hand.glyphs)), anthropic.Anthropic(api_key=state["api_key"]))
+                blanks.snap(answers, flat)
                 solve.save(str(answers_path), answers, notes)
                 for m in rerender(fit=True, size=5.0, seed=0):
                     flash(m, "warn")

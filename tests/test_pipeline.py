@@ -38,7 +38,7 @@ def photographed(img: np.ndarray) -> np.ndarray:
 @pytest.fixture(scope="module")
 def hand():
     scans = [photographed(filled_page(p)) for p in range(template.page_count())]
-    h, warnings = learn(scans)
+    h, warnings, _ = learn(scans)
     return h, warnings
 
 

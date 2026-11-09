@@ -19,7 +19,9 @@
       <form method="post" action="/learn" enctype="multipart/form-data" data-busy="Reading your handwriting…">
         <label>Photos of the filled-in pages (all {{ pages }} at once)</label>
         <input type="file" name="scans" accept="image/*" multiple required>
+        <label style="color:var(--fg);margin-top:.5rem"><input type="checkbox" name="fresh" value="1"> Start over (forget the samples I already have)</label>
         <div class="row"><button>Learn my handwriting</button></div>
+        <p class="lead" style="font-size:.85rem">Each upload <strong>adds</strong> to what it already knows. Fill in another sheet any time, even with a different pen or on a different day, and the letters get more varied. Uploading the same page twice does nothing.</p>
       </form>
       {% if hand %}
         <p><strong>Learned {{ hand.glyphs|length }} characters</strong> ({{ samples }} samples). Here they are as the pen will draw them:</p>

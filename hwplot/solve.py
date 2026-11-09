@@ -79,6 +79,9 @@ class Answer:
     kind: str
     box: tuple[float, float, float, float]  # x, y, w, h in page mm
     confidence: str
+    # What the box was snapped to on the page: "line" (box bottom is the line),
+    # "box", "option" (a multiple-choice label), or "none" (Claude's own box).
+    target: str = "none"
 
 
 def _encode(img: np.ndarray) -> str:
@@ -135,4 +138,4 @@ def save(path: str, answers: list[Answer], notes: str) -> None:
 def load(path: str) -> tuple[list[Answer], str]:
     with open(path) as f:
         data = json.load(f)
-    return [Answer(**{**a, "box": tuple(a["box"])}) for a in data["answers"]], data.get("notes", "")
+    return [Answer(**{"target": "none", **a, "box": tuple(a["box"])}) for a in data["answers"]], data.get("notes", "")
