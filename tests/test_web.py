@@ -135,4 +135,48 @@ def test_a_folder_with_two_sheets_in_it_is_explained(client, tmp_path):
     folder = [(png(filled_page(0)), "hw/a.jpg"), (png(filled_page(0)), "hw/b.jpg"),
               (io.BytesIO(b"{}"), "hw/answers.json")]
     r = client.post("/import", data={"bundle": folder}, content_type="multipart/form-data", follow_redirects=True)
-    assert b"exactly one photo" in r.data
+    assert b"find a photo with its answers.json" in r.data
+
+
+def _zip(entries):
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        for name, data in entries:
+            z.writestr(name, data)
+    buf.seek(0)
+    return buf
+
+
+def test_a_zip_of_several_sheets_lists_them_to_write_one_at_a_time(client, tmp_path):
+    pages = [(png(photographed(filled_page(p))), f"p{p}.jpg") for p in range(template.page_count())]
+    client.post("/learn", data={"scans": pages}, content_type="multipart/form-data")
+    path = tmp_path / "answers.json"
+    solve_mod.save(str(path), [Answer("1", "q", "A", "write", (140.0, 40.0, 6.0, 4.4), "high", "line")], "")
+    photo = png(filled_page(0)).getvalue()
+    z = _zip([("Spanish homework/vocab1/photo.jpg", photo), ("Spanish homework/vocab1/answers.json", path.read_bytes()),
+              ("Spanish homework/vocab2/photo.jpg", photo), ("Spanish homework/vocab2/answers.json", path.read_bytes()),
+              ("__MACOSX/Spanish homework/._vocab1", b"junk")])
+    r = client.post("/import", data={"bundle": [(z, "spanish_homework.zip")]},
+                    content_type="multipart/form-data", follow_redirects=True)
+    assert b"Found 2 sheets" in r.data
+    assert b'action="/inbox/vocab1"' in r.data and b'action="/inbox/vocab2"' in r.data
+    r = client.post("/inbox/vocab2", follow_redirects=True)
+    assert b"Loaded 1 answer" in r.data
+    r = client.post("/inbox-clear", follow_redirects=True)
+    assert b"/inbox/vocab1" not in r.data
+
+
+def test_a_zip_of_one_sheet_goes_straight_through(client, tmp_path):
+    pages = [(png(photographed(filled_page(p))), f"p{p}.jpg") for p in range(template.page_count())]
+    client.post("/learn", data={"scans": pages}, content_type="multipart/form-data")
+    path = tmp_path / "answers.json"
+    solve_mod.save(str(path), [Answer("1", "q", "A", "write", (140.0, 40.0, 6.0, 4.4), "high", "line")], "")
+    z = _zip([("vocab1/photo.jpg", png(filled_page(0)).getvalue()), ("vocab1/answers.json", path.read_bytes())])
+    r = client.post("/import", data={"homework": (z, "vocab1.zip")}, content_type="multipart/form-data",
+                    follow_redirects=True)
+    assert b"Loaded 1 answer" in r.data
+
+
+def test_inbox_names_cannot_reach_outside_it(client):
+    assert client.post("/inbox/..%2Fhand.json").status_code == 404

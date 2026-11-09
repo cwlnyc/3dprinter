@@ -148,17 +148,28 @@
   </div>
   <details style="margin-top:1rem" {{ 'open' if import_open }}>
     <summary><strong>Already have the answers?</strong> Drop in the sheet's folder</summary>
-    <p class="lead">If a sheet was solved somewhere else, such as in a Claude chat, you get a folder with its photo and <code>answers.json</code> inside. Drop that folder here, one sheet at a time. The answers only line up with the photo in that folder, so don't swap in a retaken one.</p>
+    <p class="lead">If sheets were solved somewhere else, such as in a Claude chat, drop in what you got: <strong>the zip, or a sheet's folder</strong>. A zip with several sheets is listed so you can write them one at a time. The answers only line up with the photo they came with, so don't swap in a retaken one.</p>
+    {% if inbox %}
+    <div class="inbox">
+      <strong>Sheets waiting to be written</strong>
+      {% for name in inbox %}
+      <form method="post" action="/inbox/{{ name }}" class="row" data-busy="Drawing the answers…" style="margin:.4rem 0">
+        <span style="flex:1">{{ name }}</span><button>Write this one</button>
+      </form>
+      {% endfor %}
+      <form method="post" action="/inbox-clear"><button class="secondary">Clear the list</button></form>
+    </div>
+    {% endif %}
     <form method="post" action="/import" enctype="multipart/form-data" data-busy="Drawing the answers…" id="importform">
       <label class="drop" id="drop">
         <input type="file" name="bundle" id="bundle" webkitdirectory multiple hidden>
-        <strong>Drop a sheet's folder here</strong>
-        <span>or click to choose it</span>
+        <strong>Drop the zip or a sheet's folder here</strong>
+        <span>or click to choose a folder (for a zip, use “pick files yourself” below)</span>
         <em id="dropnames"></em>
       </label>
-      <details style="margin:.6rem 0"><summary class="lead">Or pick the two files yourself</summary>
+      <details style="margin:.6rem 0"><summary class="lead">Or pick files yourself (a zip, or a photo and its answers.json)</summary>
         <div class="grid" style="margin-top:.5rem">
-          <div><label>The homework photo that was solved</label><input type="file" name="homework" accept="image/*"></div>
+          <div><label>The zip, or the homework photo that was solved</label><input type="file" name="homework" accept="image/*,.zip,application/zip"></div>
           <div><label>answers.json</label><input type="file" name="answers" accept=".json,application/json"></div>
         </div>
       </details>

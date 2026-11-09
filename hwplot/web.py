@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import io
 import os
+import re
 import shutil
 import subprocess
 import tempfile
 import threading
 import webbrowser
+import zipfile
 from dataclasses import asdict, fields
 from pathlib import Path
 
@@ -27,6 +29,52 @@ from .glyphs import Hand, learn
 ROOT = Path(__file__).resolve().parents[1]
 HARDWARE = ROOT / "hardware"
 PEN_SIZES = {"8mm": "Pencil (8 mm, hex or round)", "10mm": "Most ballpoint pens (10 mm)", "12mm": "Markers, chunky pens (12 mm)", "pilot_g2": "Pilot G2 gel pen (fits its 10.5 mm grip)"}
+
+
+PHOTO_EXT = (".jpg", ".jpeg", ".png", ".webp")
+
+
+def find_sheets(items: list[tuple[str, bytes]]) -> tuple[list[tuple[str, bytes, bytes]], list[str]]:
+    """Sort uploaded files into sheets: one photo plus one answers.json per folder.
+
+    items are (path, contents) as uploaded: loose files, a dropped folder's
+    files ("vocab1/photo.jpg"), or zip files, which are opened and read the
+    same way. Returns [(sheet name, photo, answers)] and the names of every
+    file seen, for explaining a mismatch.
+    """
+    files: list[tuple[str, bytes]] = []
+    for name, data in items:
+        if name.lower().endswith(".zip"):
+            try:
+                with zipfile.ZipFile(io.BytesIO(data)) as z:
+                    for m in z.infolist():
+                        if not m.is_dir() and not m.filename.startswith("__MACOSX/"):
+                            files.append((m.filename, z.read(m)))
+            except zipfile.BadZipFile:
+                files.append((name, b""))
+        else:
+            files.append((name, data))
+    files = [(n.replace("\\", "/"), d) for n, d in files if not n.replace("\\", "/").rsplit("/", 1)[-1].startswith(".")]
+
+    groups: dict[str, list[tuple[str, bytes]]] = {}
+    for n, d in files:
+        groups.setdefault(n.rsplit("/", 1)[0] if "/" in n else "", []).append((n, d))
+
+    def split(group):
+        photos = [d for n, d in group if n.lower().endswith(PHOTO_EXT)]
+        jsons = [d for n, d in group if n.lower().endswith(".json")]
+        return photos, jsons
+
+    sheets = []
+    for key, group in sorted(groups.items()):
+        photos, jsons = split(group)
+        if len(photos) == 1 and len(jsons) == 1:
+            sheets.append((key.rsplit("/", 1)[-1] or "sheet", photos[0], jsons[0]))
+    if not sheets:  # e.g. the two files picked separately: no shared folder, but one of each
+        photos, jsons = split(files)
+        if len(photos) == 1 and len(jsons) == 1:
+            sheets.append(("sheet", photos[0], jsons[0]))
+    return sheets, [n.rsplit("/", 1)[-1] for n, _ in files]
 
 
 def sample_grid(hand: Hand) -> list[dict]:
@@ -118,7 +166,8 @@ def create_app(workspace: str | os.PathLike = "workspace") -> Flask:
             paper=state["paper"],
             models=solve.MODELS,
             model=state["model"],
-            import_open=bool(request.args.get("import_open")),
+            import_open=bool(request.args.get("import_open")) or bool(inbox_sheets()),
+            inbox=inbox_sheets(),
             has_results=answers_path.exists(),
             has_gcode=(out / "answers.gcode").exists(),
             placement=placement,
@@ -239,37 +288,72 @@ def create_app(workspace: str | os.PathLike = "workspace") -> Flask:
         return send_file(io.BytesIO(test_pattern(load_printer()).encode()), as_attachment=True,
                          download_name="test-pattern.gcode", mimetype="text/plain")
 
+    inbox = ws / "inbox"
+
+    def inbox_sheets() -> list[str]:
+        return sorted(d.name for d in inbox.iterdir() if d.is_dir()) if inbox.exists() else []
+
+    def write_sheet(photo: bytes, answers_json: bytes):
+        """Draw one sheet's answers on its photo and go to the results."""
+        try:
+            img = cv2.imdecode(np.frombuffer(photo, np.uint8), cv2.IMREAD_COLOR)
+            if img is None:
+                raise ValueError("the photo isn't an image I can read (use JPG or PNG)")
+            flat = page.flatten(img, page_mm())
+            cv2.imwrite(str(out / "page.png"), flat)
+            answers_path.write_bytes(answers_json)
+            answers, _ = solve.load(str(answers_path))  # validates the file
+        except (ValueError, KeyError, TypeError) as e:
+            answers_path.unlink(missing_ok=True)
+            flash(f"Couldn't use that sheet: {e}", "error")
+            return redirect(url_for("index", import_open=1) + "#importform")
+        for m in rerender(fit=True, size=5.0, seed=0):
+            flash(m, "warn")
+        flash(f"Loaded {len(answers)} answer(s). Check every one before printing.", "ok")
+        return redirect(url_for("results"))
+
     @app.post("/import")
     def do_import():
-        """Answers worked out elsewhere (e.g. in a Claude chat) for this exact photo.
+        """Answers worked out elsewhere (e.g. in a Claude chat) for a particular photo.
 
-        Takes either a dropped folder (one photo and one answers.json inside) or
-        the two files picked separately.
+        Takes a dropped folder, a zip, or the two files picked separately. A zip
+        or folder holding several sheets is unpacked into an inbox, listed on
+        the page, to be written one at a time.
         """
         state["paper"] = request.form.get("paper", "letter")
-        files = [f for f in request.files.getlist("bundle") + [request.files.get("homework"), request.files.get("answers")]
-                 if f and f.filename and not os.path.basename(f.filename).startswith(".")]  # skip .DS_Store and friends
-        jsons = [f for f in files if f.filename.lower().endswith(".json")]
-        photos = [f for f in files if f.filename.lower().endswith((".jpg", ".jpeg", ".png", ".webp"))]
+        uploads = [f for f in request.files.getlist("bundle") + [request.files.get("homework"), request.files.get("answers")]
+                   if f and f.filename]
+        sheets, seen = find_sheets([(f.filename, f.read()) for f in uploads])
+        back = redirect(url_for("index", import_open=1) + "#importform")
         if load_hand() is None:
             flash("Do step 1 first: I need your handwriting before I can write answers.", "error")
-        elif len(photos) != 1 or len(jsons) != 1:
-            found = ", ".join(os.path.basename(f.filename) for f in files) or "nothing"
-            flash(f"I need exactly one photo and one answers.json (got: {found}). "
-                  "Drop one sheet's folder at a time.", "error")
-        else:
-            try:
-                flat = page.flatten(read_upload(photos[0]), page_mm())
-                cv2.imwrite(str(out / "page.png"), flat)
-                answers_path.write_bytes(jsons[0].read())
-                answers, _ = solve.load(str(answers_path))  # validates the file
-                for m in rerender(fit=True, size=5.0, seed=0):
-                    flash(m, "warn")
-                flash(f"Loaded {len(answers)} answer(s). Check every one before printing.", "ok")
-                return redirect(url_for("results"))
-            except (ValueError, KeyError, TypeError) as e:
-                answers_path.unlink(missing_ok=True)
-                flash(f"Couldn't use that answers file: {e}", "error")
+            return back
+        if not sheets:
+            flash(f"I couldn't find a photo with its answers.json in that (got: {', '.join(seen) or 'nothing'}). "
+                  "Each sheet needs one photo and one answers.json in the same folder.", "error")
+            return back
+        if len(sheets) == 1:
+            return write_sheet(sheets[0][1], sheets[0][2])
+        for name, photo, answers_json in sheets:
+            safe = re.sub(r"[^A-Za-z0-9 _.-]", "_", name).strip(" .")[:60] or "sheet"
+            d = inbox / safe
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "photo.jpg").write_bytes(photo)
+            (d / "answers.json").write_bytes(answers_json)
+        flash(f"Found {len(sheets)} sheets: {', '.join(n for n, _, _ in sheets)}. Pick one below to write it.", "ok")
+        return back
+
+    @app.post("/inbox/<name>")
+    def write_from_inbox(name):
+        d = inbox / name
+        if name not in inbox_sheets():
+            abort(404)
+        return write_sheet((d / "photo.jpg").read_bytes(), (d / "answers.json").read_bytes())
+
+    @app.post("/inbox-clear")
+    def clear_inbox():
+        shutil.rmtree(inbox, ignore_errors=True)
+        flash("Cleared the waiting sheets.", "ok")
         return redirect(url_for("index", import_open=1) + "#importform")
 
     @app.post("/solve")
