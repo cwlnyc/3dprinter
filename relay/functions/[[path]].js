@@ -39,8 +39,15 @@ export async function onRequest({ request, env }) {
   if (!origin) {
     return new Response("The Mac isn't connected yet: start `python3 -m hwplot mcp --relay` on it.", { status: 503 });
   }
-  const headers = new Headers(request.headers);
-  headers.delete("host");
+  // Pass the request on as-is, minus what Cloudflare added on the way in: a
+  // request carrying another Cloudflare hop's headers (cf-*, cdn-loop) into a
+  // Cloudflare tunnel can be taken for a loop and refused.
+  const headers = new Headers();
+  for (const [k, v] of request.headers) {
+    const name = k.toLowerCase();
+    if (name === "host" || name === "cdn-loop" || name.startsWith("cf-") || name.startsWith("x-forwarded-") || name === "x-real-ip") continue;
+    headers.set(k, v);
+  }
   const init = { method: request.method, headers, redirect: "manual" };
   if (!["GET", "HEAD"].includes(request.method)) {
     init.body = request.body;

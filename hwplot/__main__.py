@@ -8,6 +8,7 @@
   serve     the same steps as a web page on http://localhost:8000
   blanks    flatten a homework photo and list its answer lines and boxes, numbered
   mcp       the Claude connector: Claude gets the photo, solves it and prints, from any chat
+  check     test the connector's links (Mac, tunnel, .pages.dev) while it's running
 """
 from __future__ import annotations
 
@@ -126,6 +127,11 @@ def cmd_mcp(a):
     run(a.workspace, a.photos, a.port, a.serial, a.relay)
 
 
+def cmd_check(a):
+    from .connector import check
+    return check(a.workspace, a.port)
+
+
 def cmd_serve(a):
     from .web import serve
     serve(a.port, a.workspace, open_browser=not a.no_browser)
@@ -178,6 +184,11 @@ def main(argv=None):
     m.add_argument("--serial", default="", help="printer's USB port, if it isn't found by itself")
     m.add_argument("--relay", default="", help="your .pages.dev front door (remembered after the first time)")
     m.set_defaults(fn=cmd_mcp)
+
+    k = sub.add_parser("check")
+    k.add_argument("--workspace", default="workspace")
+    k.add_argument("--port", type=int, default=8765)
+    k.set_defaults(fn=cmd_check)
 
     v = sub.add_parser("serve")
     v.add_argument("--port", type=int, default=8000)

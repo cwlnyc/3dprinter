@@ -403,6 +403,9 @@ def run(workspace: str = "workspace", photos: str = "", port: int = 8765, serial
             raise SystemExit("cloudflared not found: put it in your home folder or on your PATH (see the README).")
         tunnel, origin = start_tunnel(port, binary)
 
+        data["tunnel"] = origin  # for `hwplot check`
+        _save_config(path, data)
+
         def announce():
             try:
                 register(relay, key, origin)
@@ -421,3 +424,51 @@ def run(workspace: str = "workspace", photos: str = "", port: int = 8765, serial
     finally:
         if tunnel:
             tunnel.terminate()
+
+
+INIT = {"jsonrpc": "2.0", "id": 1, "method": "initialize",
+        "params": {"protocolVersion": "2025-06-18", "capabilities": {},
+                   "clientInfo": {"name": "hwplot-check", "version": "1"}}}
+
+
+def _probe(url: str) -> tuple[bool, str]:
+    """Try opening an MCP session at url, as Claude does. (ok, what happened)."""
+    import ssl
+    import urllib.error
+    import urllib.request
+
+    try:
+        import certifi
+        tls = ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        tls = ssl.create_default_context()
+    req = urllib.request.Request(url, data=json.dumps(INIT).encode(), method="POST", headers={
+        "Content-Type": "application/json", "Accept": "application/json, text/event-stream",
+        "User-Agent": "hwplot-check/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=20, context=tls) as r:
+            body = r.read(4000).decode(errors="replace")
+            return ("serverInfo" in body, f"HTTP {r.status}" + ("" if "serverInfo" in body else f": {body[:120]!r}"))
+    except urllib.error.HTTPError as e:
+        return False, f"HTTP {e.code}: {e.read(200).decode(errors='replace')!r}"
+    except Exception as e:
+        return False, f"{type(e).__name__}: {e}"
+
+
+def check(workspace: str = "workspace", port: int = 8765) -> int:
+    """Test each link between Claude and this Mac, without printing the secret."""
+    key = secret(workspace)
+    _, data = _config(workspace)
+    links = [("This Mac (the connector itself)", f"http://127.0.0.1:{port}/{key}/mcp")]
+    if data.get("tunnel"):
+        links.append(("The tunnel (" + data["tunnel"] + ")", f"{data['tunnel']}/{key}/mcp"))
+    if data.get("relay"):
+        links.append(("The front door (" + data["relay"] + ")", f"{data['relay'].rstrip('/')}/{key}/mcp"))
+    failed = 0
+    for name, url in links:
+        ok, what = _probe(url)
+        print(f"{'OK  ' if ok else 'FAIL'} {name}: {what}")
+        failed += not ok
+    if not failed:
+        print("Every link works. In Claude, check the connector URL is exactly the one the connector printed.")
+    return 1 if failed else 0
