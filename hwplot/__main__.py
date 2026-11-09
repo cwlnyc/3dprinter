@@ -9,6 +9,7 @@
   blanks    flatten a homework photo and list its answer lines and boxes, numbered
   mcp       the Claude connector: Claude gets the photo, solves it and prints, from any chat
   check     test the connector's links (Mac, tunnel, .pages.dev) while it's running
+  remote    call one of the connector's tools from elsewhere (a Claude Code cloud session)
 """
 from __future__ import annotations
 
@@ -132,6 +133,11 @@ def cmd_check(a):
     return check(a.workspace, a.port)
 
 
+def cmd_remote(a):
+    from .remote import main as remote_main
+    return remote_main(a)
+
+
 def cmd_serve(a):
     from .web import serve
     serve(a.port, a.workspace, open_browser=not a.no_browser)
@@ -189,6 +195,14 @@ def main(argv=None):
     k.add_argument("--workspace", default="workspace")
     k.add_argument("--port", type=int, default=8765)
     k.set_defaults(fn=cmd_check)
+
+    rm = sub.add_parser("remote")
+    rm.add_argument("tool", help="tool name, or 'list'")
+    rm.add_argument("args", nargs="?", default="", help="JSON object of arguments")
+    rm.add_argument("--url", default="", help="connector address (default: $HWPLOT_URL)")
+    rm.add_argument("--token", default="", help="bearer token, if the network doesn't add it (default: $HWPLOT_TOKEN)")
+    rm.add_argument("--out", default="remote-out", help="folder for returned images")
+    rm.set_defaults(fn=cmd_remote)
 
     v = sub.add_parser("serve")
     v.add_argument("--port", type=int, default=8000)

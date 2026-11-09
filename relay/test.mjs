@@ -17,3 +17,9 @@ const r = await call("/s3cret/mcp?x=1", { method: "POST", body: "{}", headers: {
 check("requests are forwarded to the Mac", r.status === 200 && (await r.text()) === "from mac");
 check("…to the right place, path and all", seen[0][0] === "https://brave-lion.trycloudflare.com/s3cret/mcp?x=1" && seen[0][1] === "POST" && seen[0][2] === null);
 check("Cloudflare's own headers are not passed on, the connector's are", seen[0][3] === null && seen[0][4] === null && seen[0][5] === "s1");
+
+seen.length = 0;
+check("a bearer token on /mcp is accepted", (await call("/mcp", { method: "POST", body: "{}", headers: { authorization: "Bearer s3cret" } })).status === 200);
+check("…forwarded to the secret path, without the token", seen[0][0] === "https://brave-lion.trycloudflare.com/s3cret/mcp");
+check("a wrong token on /mcp is a 404", (await call("/mcp", { method: "POST", body: "{}", headers: { authorization: "Bearer nope" } })).status === 404);
+check("/mcp without a token is a 404", (await call("/mcp", { method: "POST", body: "{}" })).status === 404);

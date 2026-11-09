@@ -15,8 +15,18 @@ const TUNNEL = /^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/;
 
 export async function onRequest({ request, env }) {
   const url = new URL(request.url);
-  const [first, second] = url.pathname.split("/").filter(Boolean);
-  if (!env.HWPLOT_SECRET || first !== env.HWPLOT_SECRET) {
+  let [first, second] = url.pathname.split("/").filter(Boolean);
+  if (!env.HWPLOT_SECRET) return new Response("Not found", { status: 404 });
+
+  // Besides the secret in the path, the secret may come as a bearer token on a
+  // plain /mcp path, for clients that keep keys in headers rather than in URLs
+  // (a Claude Code cloud session's saved network credential, for one).
+  const auth = request.headers.get("authorization") || "";
+  if (url.pathname.replace(/\/+$/, "") === "/mcp" && auth === `Bearer ${env.HWPLOT_SECRET}`) {
+    url.pathname = `/${env.HWPLOT_SECRET}/mcp`;
+    [first, second] = [env.HWPLOT_SECRET, "mcp"];
+  }
+  if (first !== env.HWPLOT_SECRET) {
     return new Response("Not found", { status: 404 });
   }
 
@@ -45,7 +55,7 @@ export async function onRequest({ request, env }) {
   const headers = new Headers();
   for (const [k, v] of request.headers) {
     const name = k.toLowerCase();
-    if (name === "host" || name === "cdn-loop" || name.startsWith("cf-") || name.startsWith("x-forwarded-") || name === "x-real-ip") continue;
+    if (name === "host" || name === "cdn-loop" || name.startsWith("cf-") || name.startsWith("x-forwarded-") || name === "x-real-ip" || name === "authorization") continue;
     headers.set(k, v);
   }
   const init = { method: request.method, headers, redirect: "manual" };
