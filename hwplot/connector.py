@@ -361,8 +361,10 @@ def register(relay: str, key: str, origin: str, tries: int = 6) -> None:
     last = None
     for attempt in range(tries):
         try:
+            # Cloudflare refuses Python's default "Python-urllib" label outright (error 1010).
             req = urllib.request.Request(f"{relay.rstrip('/')}/{key}/register", data=body, method="POST",
-                                         headers={"Content-Type": "application/json"})
+                                         headers={"Content-Type": "application/json",
+                                                  "User-Agent": "hwplot-connector/1.0"})
             with urllib.request.urlopen(req, timeout=15, context=tls) as r:
                 if r.status == 200:
                     return

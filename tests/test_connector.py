@@ -170,6 +170,7 @@ def test_the_mac_registers_its_tunnel_with_the_front_door():
     class FrontDoor(http.server.BaseHTTPRequestHandler):
         def do_POST(self):
             got["path"] = self.path
+            got["agent"] = self.headers["User-Agent"]
             got["body"] = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
             self.send_response(200)
             self.end_headers()
@@ -181,7 +182,8 @@ def test_the_mac_registers_its_tunnel_with_the_front_door():
     httpd = http.server.HTTPServer(("127.0.0.1", 0), FrontDoor)
     threading.Thread(target=httpd.handle_request, daemon=True).start()
     connector.register(f"http://127.0.0.1:{httpd.server_port}", "s3cret", "https://x.trycloudflare.com")
-    assert got == {"path": "/s3cret/register", "body": {"origin": "https://x.trycloudflare.com"}}
+    assert got["path"] == "/s3cret/register" and got["body"] == {"origin": "https://x.trycloudflare.com"}
+    assert not got["agent"].startswith("Python-urllib")  # Cloudflare blocks that one (error 1010)
 
 
 def test_the_secret_comes_with_a_name_for_the_front_door(tmp_path):
