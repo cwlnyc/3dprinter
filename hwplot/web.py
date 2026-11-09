@@ -77,6 +77,34 @@ def find_sheets(items: list[tuple[str, bytes]]) -> tuple[list[tuple[str, bytes, 
     return sheets, [n.rsplit("/", 1)[-1] for n, _ in files]
 
 
+def describe_corner(x: float, y: float, flipped: bool, bed_x: float, bed_y: float) -> str:
+    """Where the page's top-left corner goes, in words rather than bed coordinates.
+
+    Bed X runs 0 (left) to bed_x (right); Y runs 0 (front edge) to bed_y (back).
+    """
+    def cm(v):
+        return f"{abs(v) / 10:.1f} cm".replace(".0 cm", " cm")
+
+    if x < 0:
+        across = f"{cm(x)} past the bed's left edge"
+    elif x > bed_x:
+        across = f"{cm(x - bed_x)} past the bed's right edge"
+    elif x <= bed_x / 2:
+        across = f"{cm(x)} in from the bed's left edge" if x >= 5 else "at the bed's left edge"
+    else:
+        across = f"{cm(bed_x - x)} in from the bed's right edge" if bed_x - x >= 5 else "at the bed's right edge"
+    if y < 0:
+        depth = f"hanging {cm(y)} off the front"
+    elif y > bed_y:
+        depth = f"hanging {cm(y - bed_y)} off the back"
+    elif y <= bed_y / 2:
+        depth = f"{cm(y)} back from the front edge"
+    else:
+        depth = f"{cm(bed_y - y)} in from the back edge"
+    which = "its corner nearest you on the right" if flipped else "its far-left corner"
+    return f"The page's top-left corner ({which}) goes {across}, {depth}."
+
+
 def sample_grid(hand: Hand) -> list[dict]:
     """Every stored sample as a small SVG path, grouped by character, for checking by eye.
 
@@ -394,7 +422,12 @@ def create_app(workspace: str | os.PathLike = "workspace") -> Flask:
             return redirect(url_for("index"))
         answers, notes = solve.load(str(answers_path))
         placement = (out / "placement.txt").read_text().split() if (out / "placement.txt").exists() else None
-        return render_template("results.html", answers=answers, notes=notes, placement=placement,
+        where = None
+        if placement:
+            pr = load_printer()
+            where = describe_corner(float(placement[0]), float(placement[1]),
+                                    len(placement) > 2 and placement[2] == "flipped", pr.bed_x, pr.bed_y)
+        return render_template("results.html", answers=answers, notes=notes, placement=placement, where=where,
                                has_gcode=(out / "answers.gcode").exists(), v=int((out / "preview.png").stat().st_mtime))
 
     @app.post("/results")

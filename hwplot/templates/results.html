@@ -23,7 +23,7 @@
         {% else %}
         <li>Lay the homework face up, <strong>top edge towards the back</strong> of the printer.</li>
         {% endif %}
-        <li>Its top-left corner goes at bed <strong>X {{ placement[0] }}, Y {{ placement[1] }}</strong>; the printer will point at it (or at an answer line) for you. The page hangs off the front and back of the bed, which is fine.</li>
+        <li><strong>{{ where }}</strong> Roughly is enough: the printer's stops show you exactly where. The page hangs off the front and back of the bed, which is fine. <span class="lead">(In printer coordinates: X {{ placement[0] }}, Y {{ placement[1] }}.)</span></li>
         <li><strong>Tape it down along every edge that's on the bed</strong> (painter's tape), and where it crosses the bed's edge, so nothing can lift. Before starting, slide the bed front to back by hand and check the overhang doesn't catch on anything.</li>
         <li>Start the print. After homing it makes <strong>two stops</strong>, with the pen hovering just above the paper. The screen says what to line up:
           <ul>

@@ -180,3 +180,11 @@ def test_a_zip_of_one_sheet_goes_straight_through(client, tmp_path):
 
 def test_inbox_names_cannot_reach_outside_it(client):
     assert client.post("/inbox/..%2Fhand.json").status_code == 404
+
+
+def test_paper_placement_is_described_in_words():
+    from hwplot.web import describe_corner
+    t = describe_corner(218.0, -33.0, True, 220, 220)
+    assert t == "The page's top-left corner (its corner nearest you on the right) goes at the bed's right edge, hanging 3.3 cm off the front."
+    t = describe_corner(80.3, 205.8, False, 220, 220)
+    assert "8 cm in from the bed's left edge" in t and "1.4 cm in from the back edge" in t

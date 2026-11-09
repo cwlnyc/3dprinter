@@ -90,7 +90,8 @@ def cmd_render(a, flat=None):
         f.write(code)
     print(f"wrote preview.png, answers.svg, answers.gcode in {a.out_dir}")
     turn = "TURNED ROUND, top edge to the front" if printer.paper_flipped else "top edge to the back"
-    print(f"place the paper {turn}, its top-left corner under the pen at bed X{printer.paper_x} Y{printer.paper_y}")
+    from .web import describe_corner
+    print(f"place the paper {turn}. " + describe_corner(printer.paper_x, printer.paper_y, printer.paper_flipped, printer.bed_x, printer.bed_y))
     return 0
 
 
