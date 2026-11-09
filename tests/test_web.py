@@ -37,12 +37,21 @@ def test_whole_flow(client, monkeypatch):
     assert b"saved" in r.data
     assert b"G1 Z1.20" in client.get("/test-pattern.gcode").data
 
-    monkeypatch.setattr(solve_mod, "solve", lambda flat, charset, client=None: (
-        [Answer("1", "12 x 7", "84", "write", (140.0, 40.0, 40.0, 10.0), "high")], "all fine"))
+    used = {}
+
+    def fake_solve(flat, charset, client=None, model=solve_mod.MODEL):
+        used["model"] = model
+        return ([Answer("1", "12 x 7", "84", "write", (140.0, 40.0, 40.0, 10.0), "high")], "all fine",
+                solve_mod.Usage(model, 2000, 6000))
+
+    monkeypatch.setattr(solve_mod, "solve", fake_solve)
     sheet = filled_page(0)
-    r = client.post("/solve", data={"homework": (png(sheet), "hw.jpg"), "api_key": "test", "paper": "letter"},
+    r = client.post("/solve", data={"homework": (png(sheet), "hw.jpg"), "api_key": "test", "paper": "letter",
+                          "model": "claude-haiku-5-5"},
                     content_type="multipart/form-data", follow_redirects=True)
     assert b"Answered 1 question" in r.data, r.data[:2000]
+    assert used["model"] == "claude-haiku-5-5"
+    assert "¢".encode() in r.data
     assert b"G-code for the printer" in r.data
     gcode = client.get("/out/answers.gcode").data.decode()
     assert "G1 Z1.20" in gcode

@@ -59,7 +59,7 @@ def create_app(workspace: str | os.PathLike = "workspace") -> Flask:
     app = Flask(__name__)
     app.secret_key = os.urandom(16)
     app.config["MAX_CONTENT_LENGTH"] = 60 * 1024 * 1024
-    state = {"api_key": os.environ.get("ANTHROPIC_API_KEY", ""), "paper": "letter"}
+    state = {"api_key": os.environ.get("ANTHROPIC_API_KEY", ""), "paper": "letter", "model": solve.MODEL}
 
     hand_path, printer_path, answers_path = ws / "hand.json", ws / "printer.json", out / "answers.json"
 
@@ -116,6 +116,8 @@ def create_app(workspace: str | os.PathLike = "workspace") -> Flask:
             printer_fields=[f.name for f in fields(Printer)],
             has_key=bool(state["api_key"]),
             paper=state["paper"],
+            models=solve.MODELS,
+            model=state["model"],
             has_results=answers_path.exists(),
             has_gcode=(out / "answers.gcode").exists(),
             placement=placement,
@@ -241,6 +243,8 @@ def create_app(workspace: str | os.PathLike = "workspace") -> Flask:
         if request.form.get("api_key"):
             state["api_key"] = request.form["api_key"].strip()
         state["paper"] = request.form.get("paper", "letter")
+        if request.form.get("model") in solve.MODELS:
+            state["model"] = request.form["model"]
         hand = load_hand()
         f = request.files.get("homework")
         if hand is None:
@@ -254,12 +258,13 @@ def create_app(workspace: str | os.PathLike = "workspace") -> Flask:
                 flat = page.flatten(read_upload(f), page_mm())
                 cv2.imwrite(str(out / "page.png"), flat)
                 import anthropic
-                answers, notes = solve.solve(flat, "".join(sorted(hand.glyphs)), anthropic.Anthropic(api_key=state["api_key"]))
+                answers, notes, usage = solve.solve(flat, "".join(sorted(hand.glyphs)),
+                                                    anthropic.Anthropic(api_key=state["api_key"]), state["model"])
                 blanks.snap(answers, flat)
                 solve.save(str(answers_path), answers, notes)
                 for m in rerender(fit=True, size=5.0, seed=0):
                     flash(m, "warn")
-                flash(f"Answered {len(answers)} question(s). Check every one before printing.", "ok")
+                flash(f"Answered {len(answers)} question(s), {usage.describe()}. Check every one before printing.", "ok")
                 return redirect(url_for("results"))
             except Exception as e:  # shown to the one local user, who needs the reason
                 flash(f"Solving failed: {e}", "error")

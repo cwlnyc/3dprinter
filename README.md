@@ -60,6 +60,10 @@ That runs both halves. Separately:
 - `solve homework.jpg` finds the page in the photo, flattens it, and sends it to
   Claude, which reads each question, solves it, and says where the answer goes.
   The result is written to `out/answers.json`, with a confidence on each answer.
+  It uses Claude Sonnet 5.5 by default, roughly 5–8¢ a sheet. Pass
+  `--model claude-opus-5-5` for the most accurate (about 20¢), or
+  `--model claude-haiku-5-5` for under 1¢ on simple sheets. The web page has the
+  same choice, and every solve prints what it actually cost.
 - `render` lays the answers out in your handwriting and writes:
   - `out/preview.png`: the sheet with the answers drawn on. **Check this first.**
   - `out/answers.svg`: just the answers, at true page size. This is the "file of

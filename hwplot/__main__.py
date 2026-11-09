@@ -46,7 +46,8 @@ def cmd_solve(a):
     os.makedirs(a.out_dir, exist_ok=True)
     hand = Hand.load(a.hand)
     flat = _flatten(a.homework, a.out_dir, a.paper)
-    answers, notes = solve.solve(flat, "".join(sorted(hand.glyphs)))
+    answers, notes, usage = solve.solve(flat, "".join(sorted(hand.glyphs)), model=a.model)
+    print("cost:", usage.describe())
     moved = blanks.snap(answers, flat)
     if moved:
         print(f"snapped {moved} answer(s) onto the sheet's own lines and boxes")
@@ -121,6 +122,9 @@ def main(argv=None):
         p.add_argument("--hand", default="hand.json")
         p.add_argument("--out-dir", default="out")
         p.add_argument("--paper", choices=["letter", "a4"], default="letter")
+        if homework:
+            p.add_argument("--model", choices=list(solve.MODELS), default=solve.MODEL,
+                           help="which Claude solves the sheet (default: %(default)s)")
 
     def render_opts(p):
         p.add_argument("--printer", default="printer.json")

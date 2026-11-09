@@ -17,7 +17,35 @@ import numpy as np
 
 from .page import PX_PER_MM
 
-MODEL = "claude-opus-5-5"
+# Which Claude reads and solves the sheet. Cost per sheet is mostly the model's
+# own working (output tokens), so a cheaper model or a lower effort is what
+# moves the bill. Prices are US dollars per million tokens.
+MODELS = {
+    "claude-sonnet-5-5": {"label": "Sonnet 5.5: good and cheap (default)", "in": 2.00, "out": 10.00,
+                          "effort": "medium", "fallback": True},
+    "claude-opus-5-5": {"label": "Opus 5.5: most accurate, about 3x the cost", "in": 4.00, "out": 20.00,
+                        "effort": "high", "fallback": True},
+    "claude-haiku-5-5": {"label": "Haiku 5.5: cheapest, simple sheets only", "in": 0.10, "out": 0.50,
+                         "effort": "medium", "fallback": False},
+}
+MODEL = "claude-sonnet-5-5"
+
+
+@dataclass
+class Usage:
+    model: str
+    input_tokens: int
+    output_tokens: int
+
+    @property
+    def dollars(self) -> float:
+        price = MODELS.get(self.model, MODELS[MODEL])
+        return (self.input_tokens * price["in"] + self.output_tokens * price["out"]) / 1_000_000
+
+    def describe(self) -> str:
+        cents = self.dollars * 100
+        cost = f"{cents:.1f}¢" if cents < 100 else f"${self.dollars:.2f}"
+        return f"about {cost} ({self.input_tokens:,} tokens in, {self.output_tokens:,} out, {self.model})"
 
 SCHEMA = {
     "type": "object",
@@ -91,16 +119,23 @@ def _encode(img: np.ndarray) -> str:
     return base64.standard_b64encode(buf.tobytes()).decode()
 
 
-def solve(flat: np.ndarray, charset: str, client: anthropic.Anthropic | None = None) -> tuple[list[Answer], str]:
+def solve(flat: np.ndarray, charset: str, client: anthropic.Anthropic | None = None,
+          model: str = MODEL) -> tuple[list[Answer], str, Usage]:
+    if model not in MODELS:
+        raise ValueError(f"unknown model {model!r}; choose from {', '.join(MODELS)}")
+    cfg = MODELS[model]
     client = client or anthropic.Anthropic()
     h, w = flat.shape[:2]
+    extra = {}
+    if cfg["fallback"]:
+        # If the model declines, the API retries on another model in the same call.
+        # Haiku has no server-side fallback, so it is not asked for one.
+        extra = {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"}
     with client.beta.messages.stream(
-        model=MODEL,
+        model=model,
         max_tokens=64000,
-        betas=["server-side-fallback-2026-07-01"],
-        fallbacks="default",
         thinking={"type": "adaptive"},
-        output_config={"effort": "high", "format": {"type": "json_schema", "schema": SCHEMA}},
+        output_config={"effort": cfg["effort"], "format": {"type": "json_schema", "schema": SCHEMA}},
         messages=[
             {
                 "role": "user",
@@ -110,6 +145,7 @@ def solve(flat: np.ndarray, charset: str, client: anthropic.Anthropic | None = N
                 ],
             }
         ],
+        **extra,
     ) as stream:
         msg = stream.get_final_message()
 
@@ -127,7 +163,8 @@ def solve(flat: np.ndarray, charset: str, client: anthropic.Anthropic | None = N
         )
         for a in data["answers"]
     ]
-    return answers, data["notes"]
+    usage = Usage(model, msg.usage.input_tokens, msg.usage.output_tokens)
+    return answers, data["notes"], usage
 
 
 def save(path: str, answers: list[Answer], notes: str) -> None:
