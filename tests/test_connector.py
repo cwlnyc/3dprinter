@@ -196,3 +196,14 @@ def test_settings_from_before_the_front_door_get_a_site_name_and_keep_their_secr
     (tmp_path / "connector.json").write_text(json.dumps({"secret": "old-secret-kept"}))
     assert connector.secret(tmp_path) == "old-secret-kept"
     assert json.loads((tmp_path / "connector.json").read_text())["relay_project"].startswith("hwplot-")
+
+
+def test_a_photo_sent_from_the_chat_becomes_the_sheet(workspace):
+    import base64
+    server = connector.create_server(workspace, sender=Sender(open_serial=lambda port: FakeMarlin()))
+    ok, buf = cv2.imencode(".jpg", photographed(blank_sheet()))
+    r = call(server, "put_photo", filename="from-chat.jpg", data_base64=base64.b64encode(buf.tobytes()).decode())
+    assert "Saved from-chat.jpg" in text_of(r)
+    assert "from-chat.jpg" in text_of(call(server, "get_sheet", filename="from-chat.jpg"))
+    assert "isn't an image" in text_of(call(server, "put_photo", filename="x.jpg",
+                                             data_base64=base64.b64encode(b"not a picture").decode()))

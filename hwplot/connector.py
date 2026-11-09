@@ -159,6 +159,24 @@ def create_server(workspace: str | os.PathLike = "workspace", photos: str | os.P
                 "Use zoom for small print.", Image(data=_jpeg(flat), format="jpeg")]
 
     @server.tool()
+    def put_photo(filename: str, data_base64: str) -> str:
+        """Save a homework photo sent from the chat (base64 JPEG or PNG) so get_sheet can use it."""
+        import base64
+        import binascii
+
+        name = Path(filename).name or "homework.jpg"
+        if Path(name).suffix.lower() not in PHOTO_EXT:
+            name += ".jpg"
+        try:
+            raw = base64.b64decode(data_base64, validate=True)
+        except (binascii.Error, ValueError):
+            return "That isn't valid base64."
+        if cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR) is None:
+            return "That isn't an image this can read (send JPEG or PNG)."
+        (photo_dir / name).write_bytes(raw)
+        return f"Saved {name} ({len(raw) // 1024} KB). Call get_sheet to load it."
+
+    @server.tool()
     def zoom(x: float, y: float, w: float, h: float) -> list:
         """A sharper close-up of part of the sheet (mm on the page), for reading small text."""
         s = sheet()

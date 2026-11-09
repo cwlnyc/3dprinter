@@ -58,4 +58,6 @@ def main(a) -> int:
     if not url:
         raise SystemExit("Give the connector address with --url or HWPLOT_URL (e.g. https://hwplot-xxxx.pages.dev/mcp)")
     args = json.loads(a.args) if a.args else {}
+    if a.photo:  # put_photo: send a local image file without pasting base64 on the command line
+        args = {"filename": Path(a.photo).name, "data_base64": base64.b64encode(Path(a.photo).read_bytes()).decode()}
     return call(url, a.tool, args, a.out, a.token or os.environ.get("HWPLOT_TOKEN", ""))

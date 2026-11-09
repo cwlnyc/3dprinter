@@ -213,6 +213,32 @@ Without the front door, `python3 -m hwplot mcp` alone serves on
 `localhost:8765`, and any tunnel pointed at it works. The front door just keeps
 the address from changing.
 
+### Running it on a Raspberry Pi instead of the Mac
+
+A Pi 3 or newer next to the printer can run the connector all the time, so the
+Mac doesn't have to stay plugged in.
+
+1. With Raspberry Pi Imager, flash **Raspberry Pi OS Lite (64-bit)**. In its
+   settings, set a hostname (e.g. `hwplot`), a user, your Wi-Fi, and turn on SSH.
+2. Stop the connector on the Mac (Ctrl + C). Only one should run at a time.
+3. From the Mac, in the 3dprinter folder:
+   ```bash
+   ./scripts/pi-push.sh <user>@hwplot.local
+   ```
+   It copies the project and your `workspace/` (handwriting, printer settings,
+   connector secret) and installs everything. The connector then starts by
+   itself whenever the Pi is on. Same connector URL as before.
+4. Plug the printer into the Pi with a USB-A to Mini-USB data cable.
+
+Rerun step 3 after changing anything on the Mac, such as handwriting or
+calibration.
+
+### Sending the photo from the chat
+
+`put_photo` takes the photo itself (base64), so a chat can hand over the
+picture it was sent instead of it being saved to a folder:
+`python3 -m hwplot remote put_photo --photo homework.jpg`.
+
 ### The paper jig
 
 `hardware/stl/paper_jig.stl` is a tray that clips onto the front-right corner of
