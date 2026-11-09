@@ -60,3 +60,26 @@ def test_solve_without_handwriting_says_what_to_do(client):
 def test_unknown_files_are_not_served(client):
     assert client.get("/out/../hand.json").status_code == 404
     assert client.get("/hardware/pen_holder_99mm.stl").status_code == 404
+
+
+def test_a_bad_sample_can_be_deleted_and_put_back(client):
+    pages = [(png(photographed(filled_page(0))), "p0.jpg")]
+    client.post("/learn", data={"scans": pages}, content_type="multipart/form-data")
+    page = client.get("/").data
+    assert b"Check each sample" in page and b'action="/samples/delete"' in page
+
+    before = page.count(b'class="sitem"')
+    r = client.post("/samples/delete", data={"ch": "a", "idx": "0"}, follow_redirects=True)
+    assert b"Deleted one" in r.data
+    assert r.data.count(b'class="sitem"') == before - 1
+    assert b"Undo last delete" in r.data
+
+    r = client.post("/samples/undo", follow_redirects=True)
+    assert r.data.count(b'class="sitem"') == before
+
+
+def test_deleting_a_sample_that_is_gone_is_harmless(client):
+    pages = [(png(photographed(filled_page(0))), "p0.jpg")]
+    client.post("/learn", data={"scans": pages}, content_type="multipart/form-data")
+    r = client.post("/samples/delete", data={"ch": "a", "idx": "99"}, follow_redirects=True)
+    assert b"already gone" in r.data

@@ -39,6 +39,15 @@
   table { border-collapse:collapse; width:100%; font-size:.92rem; } th, td { text-align:left; padding:.45rem .4rem; border-bottom:1px solid var(--line); vertical-align:top; }
   td input[type=number] { width:4.6rem; } .low { color:var(--err); font-weight:600; } .medium { color:var(--warn); font-weight:600; }
   code, kbd { font-family:ui-monospace, monospace; font-size:.88em; background:#f1f1f4; padding:.05rem .3rem; border-radius:4px; }
+  .samples { margin-top:1.2rem; border-top:1px solid var(--line); padding-top:1rem; } .samples summary { cursor:pointer; }
+  .sgrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(118px, 1fr)); gap:.5rem; margin-top:.8rem; }
+  .scell { display:flex; align-items:center; gap:.35rem; border:1px solid var(--line); border-radius:8px; padding:.3rem .4rem; background:#fff; }
+  .slabel { font:600 .8rem ui-monospace, monospace; color:var(--muted); min-width:1.1rem; text-align:center; }
+  .sitem { position:relative; margin:0; }
+  .sitem svg { display:block; height:46px; width:auto; max-width:46px; }
+  .sitem path { fill:none; stroke:var(--ink); stroke-width:.45; stroke-linecap:round; stroke-linejoin:round; }
+  .sdel { position:absolute; top:-6px; right:-6px; width:20px; height:20px; padding:0; border-radius:50%; font:700 13px/18px system-ui; background:#fff; color:var(--err); border:1px solid var(--line); opacity:.75; }
+  .sdel:hover, .sdel:focus { opacity:1; background:var(--err); color:#fff; border-color:var(--err); }
   #busy { display:none; position:fixed; inset:0; background:rgba(255,255,255,.88); place-items:center; text-align:center; z-index:10; }
   #busy.on { display:grid; } .spin { width:42px; height:42px; border:4px solid var(--line); border-top-color:var(--ink); border-radius:50%; animation:s 1s linear infinite; margin:0 auto 1rem; } @keyframes s { to { transform:rotate(360deg);} }
 </style>

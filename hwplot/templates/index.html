@@ -31,6 +31,27 @@
       {% endif %}
     </div>
   </div>
+  {% if grid %}
+  <details id="samples" class="samples" {{ 'open' if can_undo }}>
+    <summary><strong>Check each sample</strong> ({{ samples }}): delete any that came out wrong</summary>
+    <p class="lead">Every box you wrote, as it was read. Click <strong>×</strong> on a bad one (a wrong letter, a smudge, a crossed-out box) to drop it. Only that sample goes; the other copy of the letter stays.</p>
+    {% if can_undo %}<form method="post" action="/samples/undo" class="row"><button class="secondary">Undo last delete</button></form>{% endif %}
+    <div class="sgrid">
+      {% for g in grid %}
+      <div class="scell">
+        <span class="slabel">{{ g.ch }}</span>
+        {% for it in g.samples %}
+        <form method="post" action="/samples/delete" class="sitem">
+          <svg viewBox="{{ it.vb }}" role="img" aria-label="Sample {{ loop.index }} of {{ g.ch }}"><path d="{{ it.d }}"/></svg>
+          <input type="hidden" name="ch" value="{{ g.ch }}"><input type="hidden" name="idx" value="{{ it.idx }}">
+          <button class="sdel" aria-label="Delete sample {{ loop.index }} of {{ g.ch }}" title="Delete this one">×</button>
+        </form>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+  </details>
+  {% endif %}
 </section>
 
 <section class="step" id="step2">

@@ -29,6 +29,29 @@ HARDWARE = ROOT / "hardware"
 PEN_SIZES = {"8mm": "Pencil (8 mm, hex or round)", "10mm": "Most ballpoint pens (10 mm)", "12mm": "Markers, chunky pens (12 mm)", "pilot_g2": "Pilot G2 gel pen (fits its 10.5 mm grip)"}
 
 
+def sample_grid(hand: Hand) -> list[dict]:
+    """Every stored sample as a small SVG path, grouped by character, for checking by eye.
+
+    Each cell shares one vertical scale and baseline, so a sample that is too
+    tall, too small or sitting too high stands out next to its neighbours.
+    """
+    top, bottom = -hand.cap_height * 1.5, hand.cap_height * 0.7
+    order = list(template.CHARSET) + sorted(set(hand.glyphs) - set(template.CHARSET))
+    groups = []
+    for ch in order:
+        items = []
+        for i, g in enumerate(hand.glyphs.get(ch, [])):
+            w = max(g.width, hand.cap_height * 0.35)
+            d = " ".join(
+                "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in st) if len(st) > 1 else f"M{st[0][0]:.2f},{st[0][1]:.2f} l0.01,0"
+                for st in g.strokes if st
+            )
+            items.append({"idx": i, "d": d, "vb": f"{-0.6:.2f} {top:.2f} {w + 1.2:.2f} {bottom - top:.2f}"})
+        if items:
+            groups.append({"ch": ch, "samples": items})
+    return groups
+
+
 def create_app(workspace: str | os.PathLike = "workspace") -> Flask:
     ws = Path(workspace).resolve()
     out = ws / "out"
@@ -97,6 +120,8 @@ def create_app(workspace: str | os.PathLike = "workspace") -> Flask:
             has_gcode=(out / "answers.gcode").exists(),
             placement=placement,
             pen_sizes=PEN_SIZES,
+            grid=sample_grid(hand) if hand else [],
+            can_undo="undo" in state,
             openscad=bool(shutil.which("openscad")),
         )
 
@@ -126,6 +151,34 @@ def create_app(workspace: str | os.PathLike = "workspace") -> Flask:
         for w in warnings:
             flash(w, "warn")
         return redirect(url_for("index") + "#step1")
+
+    @app.post("/samples/delete")
+    def delete_sample():
+        hand = load_hand() or abort(404)
+        ch, idx = request.form.get("ch", ""), request.form.get("idx", "")
+        if ch not in hand.glyphs or not idx.isdigit() or int(idx) >= len(hand.glyphs[ch]):
+            flash("That sample is already gone.", "warn")
+            return redirect(url_for("index") + "#samples")
+        g = hand.glyphs[ch].pop(int(idx))
+        if not hand.glyphs[ch]:
+            del hand.glyphs[ch]
+        hand.measure()
+        hand.save(str(hand_path))
+        state["undo"] = (ch, int(idx), g)
+        flash(f"Deleted one '{ch}'. ", "ok")
+        return redirect(url_for("index") + "#samples")
+
+    @app.post("/samples/undo")
+    def undo_delete():
+        hand, last = load_hand(), state.pop("undo", None)
+        if hand is None or last is None:
+            return redirect(url_for("index") + "#samples")
+        ch, idx, g = last
+        hand.glyphs.setdefault(ch, []).insert(idx, g)
+        hand.measure()
+        hand.save(str(hand_path))
+        flash(f"Put the '{ch}' back.", "ok")
+        return redirect(url_for("index") + "#samples")
 
     @app.get("/specimen.png")
     def specimen():
