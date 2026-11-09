@@ -115,3 +115,24 @@ def test_a_broken_answers_file_is_refused(client):
                                      "answers": (io.BytesIO(b'{"nope": 1}'), "answers.json")},
                     content_type="multipart/form-data", follow_redirects=True)
     assert b"Couldn" in r.data
+
+
+def test_a_dropped_folder_is_imported(client, tmp_path):
+    pages = [(png(photographed(filled_page(p))), f"p{p}.jpg") for p in range(template.page_count())]
+    client.post("/learn", data={"scans": pages}, content_type="multipart/form-data")
+    path = tmp_path / "answers.json"
+    solve_mod.save(str(path), [Answer("1", "q", "A", "write", (140.0, 40.0, 6.0, 4.4), "high", "line")], "")
+    folder = [(png(filled_page(0)), "vocab1/photo.jpg"), (io.BytesIO(path.read_bytes()), "vocab1/answers.json"),
+              (io.BytesIO(b"junk"), "vocab1/.DS_Store")]
+    r = client.post("/import", data={"bundle": folder, "paper": "letter"},
+                    content_type="multipart/form-data", follow_redirects=True)
+    assert b"Loaded 1 answer" in r.data
+
+
+def test_a_folder_with_two_sheets_in_it_is_explained(client, tmp_path):
+    pages = [(png(photographed(filled_page(0))), "p0.jpg")]
+    client.post("/learn", data={"scans": pages}, content_type="multipart/form-data")
+    folder = [(png(filled_page(0)), "hw/a.jpg"), (png(filled_page(0)), "hw/b.jpg"),
+              (io.BytesIO(b"{}"), "hw/answers.json")]
+    r = client.post("/import", data={"bundle": folder}, content_type="multipart/form-data", follow_redirects=True)
+    assert b"exactly one photo" in r.data

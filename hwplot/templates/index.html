@@ -147,16 +147,52 @@
     </form>
   </div>
   <details style="margin-top:1rem">
-    <summary><strong>Already have the answers?</strong> Upload them with the photo instead</summary>
-    <p class="lead">If the sheet was solved somewhere else, such as in a Claude chat, upload <strong>the exact same photo</strong> that was solved, plus its <code>answers.json</code>. The answer positions only line up with that photo, so a retaken photo won't match.</p>
-    <form method="post" action="/import" enctype="multipart/form-data" data-busy="Drawing the answers…">
+    <summary><strong>Already have the answers?</strong> Drop in the sheet's folder</summary>
+    <p class="lead">If a sheet was solved somewhere else, such as in a Claude chat, you get a folder with its photo and <code>answers.json</code> inside. Drop that folder here, one sheet at a time. The answers only line up with the photo in that folder, so don't swap in a retaken one.</p>
+    <form method="post" action="/import" enctype="multipart/form-data" data-busy="Drawing the answers…" id="importform">
+      <label class="drop" id="drop">
+        <input type="file" name="bundle" id="bundle" webkitdirectory multiple hidden>
+        <strong>Drop a sheet's folder here</strong>
+        <span>or click to choose it</span>
+        <em id="dropnames"></em>
+      </label>
+      <details style="margin:.6rem 0"><summary class="lead">Or pick the two files yourself</summary>
+        <div class="grid" style="margin-top:.5rem">
+          <div><label>The homework photo that was solved</label><input type="file" name="homework" accept="image/*"></div>
+          <div><label>answers.json</label><input type="file" name="answers" accept=".json,application/json"></div>
+        </div>
+      </details>
       <div class="grid">
-        <div><label>The homework photo that was solved</label><input type="file" name="homework" accept="image/*" required></div>
-        <div><label>answers.json</label><input type="file" name="answers" accept=".json,application/json" required></div>
         <div><label>Paper size</label><select name="paper"><option value="letter" {{ 'selected' if paper=='letter' }}>US Letter</option><option value="a4" {{ 'selected' if paper=='a4' }}>A4</option></select></div>
       </div>
       <div class="row"><button {{ 'disabled' if not hand }}>Write these answers</button></div>
     </form>
+    <script>
+      (() => {
+        const drop = document.getElementById("drop"), input = document.getElementById("bundle"), names = document.getElementById("dropnames");
+        const show = () => { names.textContent = [...input.files].map(f => f.name).filter(n => !n.startsWith(".")).join(", "); };
+        input.addEventListener("change", show);
+        // A dropped folder arrives as an entry tree; read every file in it.
+        const walk = (entry) => new Promise((done) => {
+          if (entry.isFile) return entry.file((f) => done([f]), () => done([]));
+          const reader = entry.createReader(), all = [];
+          const next = () => reader.readEntries(async (batch) => {
+            if (!batch.length) return done((await Promise.all(all.map(walk))).flat());
+            all.push(...batch); next();
+          }, () => done([]));
+          next();
+        });
+        ["dragenter", "dragover"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+        drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+        drop.addEventListener("drop", async (e) => {
+          e.preventDefault(); drop.classList.remove("over");
+          const entries = [...e.dataTransfer.items].map((i) => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
+          const files = entries.length ? (await Promise.all(entries.map(walk))).flat() : [...e.dataTransfer.files];
+          const dt = new DataTransfer(); files.forEach((f) => dt.items.add(f));
+          input.files = dt.files; show();
+        });
+      })();
+    </script>
   </details>
 </section>
 

@@ -240,18 +240,27 @@ def create_app(workspace: str | os.PathLike = "workspace") -> Flask:
 
     @app.post("/import")
     def do_import():
-        """Answers worked out elsewhere (e.g. in a Claude chat) for this exact photo."""
+        """Answers worked out elsewhere (e.g. in a Claude chat) for this exact photo.
+
+        Takes either a dropped folder (one photo and one answers.json inside) or
+        the two files picked separately.
+        """
         state["paper"] = request.form.get("paper", "letter")
-        photo, answers_file = request.files.get("homework"), request.files.get("answers")
+        files = [f for f in request.files.getlist("bundle") + [request.files.get("homework"), request.files.get("answers")]
+                 if f and f.filename and not os.path.basename(f.filename).startswith(".")]  # skip .DS_Store and friends
+        jsons = [f for f in files if f.filename.lower().endswith(".json")]
+        photos = [f for f in files if f.filename.lower().endswith((".jpg", ".jpeg", ".png", ".webp"))]
         if load_hand() is None:
             flash("Do step 1 first: I need your handwriting before I can write answers.", "error")
-        elif not photo or not photo.filename or not answers_file or not answers_file.filename:
-            flash("Choose both the homework photo and its answers.json.", "error")
+        elif len(photos) != 1 or len(jsons) != 1:
+            found = ", ".join(os.path.basename(f.filename) for f in files) or "nothing"
+            flash(f"I need exactly one photo and one answers.json (got: {found}). "
+                  "Drop one sheet's folder at a time.", "error")
         else:
             try:
-                flat = page.flatten(read_upload(photo), page_mm())
+                flat = page.flatten(read_upload(photos[0]), page_mm())
                 cv2.imwrite(str(out / "page.png"), flat)
-                answers_path.write_bytes(answers_file.read())
+                answers_path.write_bytes(jsons[0].read())
                 answers, _ = solve.load(str(answers_path))  # validates the file
                 for m in rerender(fit=True, size=5.0, seed=0):
                     flash(m, "warn")
