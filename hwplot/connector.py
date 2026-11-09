@@ -516,6 +516,41 @@ def check(workspace: str = "workspace", port: int = 8765) -> int:
         ok, what = _probe(url)
         print(f"{'OK  ' if ok else 'FAIL'} {name}: {what}")
         failed += not ok
+    # Then the whole conversation Claude has, through the address Claude uses.
+    name, url = links[-1]
+    for step, ok, what in _session(url):
+        print(f"{'OK  ' if ok else 'FAIL'} Through {name.split(' (')[0].lower()}, {step}: {what}")
+        failed += not ok
     if not failed:
-        print("Every link works. In Claude, check the connector URL is exactly the one the connector printed.")
+        print("Every step works from this Mac. In Claude, check the connector URL is exactly the one printed.")
     return 1 if failed else 0
+
+
+def _session(url: str) -> list[tuple[str, bool, str]]:
+    """Connect with the official MCP client, list the tools and call one, as Claude does."""
+    import anyio
+
+    results: list[tuple[str, bool, str]] = []
+
+    async def go():
+        from mcp.client.session import ClientSession
+        from mcp.client.streamable_http import streamable_http_client
+        async with streamable_http_client(url) as streams:
+            async with ClientSession(streams[0], streams[1]) as session:
+                r = await session.initialize()
+                results.append(("connecting", True, f"server {r.server_info.name} {r.server_info.version}"))
+                tools = await session.list_tools()
+                results.append(("listing tools", True, f"{len(tools.tools)} tools"))
+                status = await session.call_tool("printer_status", {})
+                text = " ".join(c.text for c in status.content if getattr(c, "type", "") == "text")
+                results.append(("calling printer_status", not status.is_error, text[:80]))
+
+    try:
+        anyio.run(go)
+    except BaseException as e:  # an ExceptionGroup from the client's task group, usually
+        inner = e
+        while isinstance(inner, BaseExceptionGroup) and inner.exceptions:
+            inner = inner.exceptions[0]
+        step = ["connecting", "listing tools", "calling printer_status"][min(len(results), 2)]
+        results.append((step, False, f"{type(inner).__name__}: {str(inner)[:160]}"))
+    return results

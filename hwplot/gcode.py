@@ -273,28 +273,123 @@ def jig_calibrate(p: Printer, measured: list[tuple[float, float]]) -> Printer:
     return q
 
 
-def generate(strokes: list[Polyline], p: Printer, align: bool = True, marks: list[Mark] | None = None) -> str:
-    check_reach(strokes, p)
-    turn = "top edge to the FRONT (turned round)" if p.paper_flipped else "top edge to the back"
-    out = ["; homework-plotter", f"; paper top-left corner at bed X{p.paper_x} Y{p.paper_y} (pen position), {turn}"]
-    out += p.start.format(**asdict(p)).splitlines()
-    out.append(f"G0 Z{p.travel_z + 10:.2f} F{p.feed_z}")
-    if align:
-        out += alignment(p, marks)
-    out.append(f"G0 Z{p.travel_z:.2f} F{p.feed_z}")
-    out.append("M117 Writing")
-    for s in strokes:
-        if not s:
-            continue
-        x, y = p.to_bed(*s[0])
-        out.append(f"G0 X{x:.2f} Y{y:.2f} F{p.feed_travel}")
-        out.append(f"G1 Z{p.z_down:.2f} F{p.feed_z}")
-        for px, py in s[1:]:
-            x, y = p.to_bed(px, py)
-            out.append(f"G1 X{x:.2f} Y{y:.2f} F{p.feed_draw}")
+@dataclass
+class Pass:
+    """One placement of the sheet and the answers written while it's there."""
+    printer: Printer      # with paper_x / paper_y / paper_flipped for this pass
+    answers: list[int]    # indexes of the answers written in this pass
+    strokes: list[Polyline]
+    align: bool           # stop to line the sheet up first (not needed in the jig)
+
+
+def _bbox(strokes: list[Polyline]) -> tuple[float, float, float, float]:
+    xs = [x for s in strokes for x, _ in s]
+    ys = [y for s in strokes for _, y in s]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def _fits(strokes: list[Polyline], p: Printer) -> bool:
+    try:
+        check_reach(strokes, p)
+        return True
+    except OutOfReach:
+        return False
+
+
+def plan_passes(per_answer: list[list[Polyline]], p: Printer, page_w: float = 215.9,
+                margin: float = 2.0) -> list[Pass]:
+    """Split the answers into as few placements of the sheet as reach allows.
+
+    The pen reaches a window of the page about 14 x 21 cm on this printer. When
+    the answers spread wider than that, the ones that fit are written first,
+    then the printer stops and the sheet is moved (usually turned round) for
+    the rest. With the jig, the first pass is whatever the jig position reaches.
+    Raises OutOfReach only for an answer too big for the window on its own.
+    """
+    from .strokes import order_for_plotting
+
+    todo = [i for i, s in enumerate(per_answer) if s]
+    passes: list[Pass] = []
+    if p.jig and todo:
+        q, _ = place([], p, page_w)
+        inside = [i for i in todo if _fits(per_answer[i], q)]
+        if inside:
+            passes.append(Pass(q, inside, order_for_plotting([s for i in inside for s in per_answer[i]]), False))
+            todo = [i for i in todo if i not in inside]
+
+    (x0, x1), (y0, y1) = pen_range(p)
+    win_w, win_h = (x1 - x0) - 2 * margin, (y1 - y0) - 2 * margin
+    boxes = {i: _bbox(per_answer[i]) for i in todo}
+    while todo:
+        # The window position (in page mm) holding the most remaining answers.
+        xs = sorted({boxes[i][0] for i in todo} | {boxes[i][2] - win_w for i in todo})
+        ys = sorted({boxes[i][1] for i in todo} | {boxes[i][3] - win_h for i in todo})
+        best: list[int] = []
+        for wx in xs:
+            for wy in ys:
+                inside = [i for i in todo if boxes[i][0] >= wx - 1e-6 and boxes[i][2] <= wx + win_w + 1e-6
+                          and boxes[i][1] >= wy - 1e-6 and boxes[i][3] <= wy + win_h + 1e-6]
+                if len(inside) > len(best):
+                    best = inside
+        if not best:
+            too_big = [i for i in todo if boxes[i][2] - boxes[i][0] > win_w or boxes[i][3] - boxes[i][1] > win_h]
+            raise OutOfReach(f"{len(too_big) or len(todo)} answer(s) are bigger than the pen can reach in one go")
+        strokes = [s for i in best for s in per_answer[i]]
+        q = fit_paper(strokes, p, margin=margin, page_w=page_w)
+        if not _fits(strokes, q):  # very tight fit: try again without the safety margin
+            q = fit_paper(strokes, p, margin=0.0, page_w=page_w)
+        if not _fits(strokes, q):
+            raise OutOfReach("couldn't place a group of answers within reach")
+        q.jig = False
+        passes.append(Pass(q, best, order_for_plotting(strokes), True))
+        todo = [i for i in todo if i not in best]
+    return passes
+
+
+def _turn(p: Printer) -> str:
+    return "title to FRONT" if p.paper_flipped else "title to BACK"
+
+
+def generate_passes(passes: list[Pass], marks: list[Mark] | None = None) -> str:
+    """One G-code file for every pass: between passes the printer parks and waits for the sheet to be moved."""
+    if not passes:
+        raise OutOfReach("nothing to write")
+    first = passes[0].printer
+    out = ["; homework-plotter", f"; {len(passes)} pass(es)"]
+    for n, ps in enumerate(passes, 1):
+        where = "in the jig" if not ps.align else \
+            f"top-left corner at bed X{ps.printer.paper_x} Y{ps.printer.paper_y}, {_turn(ps.printer)}"
+        out.append(f"; pass {n}: {len(ps.answers)} answer(s), sheet {where}")
+    out += first.start.format(**asdict(first)).splitlines()
+    for n, ps in enumerate(passes, 1):
+        p = ps.printer
+        check_reach(ps.strokes, p)
+        out.append(f"G0 Z{p.travel_z + 10:.2f} F{p.feed_z}")
+        if n > 1:
+            # Park with the bed out front and wait while the sheet is moved.
+            out += [f"; pass {n}: move the sheet", f"G0 X0 Y{p.bed_y:.2f} F{p.feed_travel}",
+                    *_say(p, f"Turn: {_turn(p)}")]
+        if ps.align:
+            out += alignment(p, marks)
         out.append(f"G0 Z{p.travel_z:.2f} F{p.feed_z}")
-    out += p.end.format(**asdict(p)).splitlines()
+        out.append(f"M117 Writing {n}/{len(passes)}" if len(passes) > 1 else "M117 Writing")
+        for s in ps.strokes:
+            if not s:
+                continue
+            x, y = p.to_bed(*s[0])
+            out.append(f"G0 X{x:.2f} Y{y:.2f} F{p.feed_travel}")
+            out.append(f"G1 Z{p.z_down:.2f} F{p.feed_z}")
+            for px, py in s[1:]:
+                x, y = p.to_bed(px, py)
+                out.append(f"G1 X{x:.2f} Y{y:.2f} F{p.feed_draw}")
+            out.append(f"G0 Z{p.travel_z:.2f} F{p.feed_z}")
+    out += first.end.format(**asdict(first)).splitlines()
     return "\n".join(out) + "\n"
+
+
+def generate(strokes: list[Polyline], p: Printer, align: bool = True, marks: list[Mark] | None = None) -> str:
+    """A single pass with the sheet where p says."""
+    return generate_passes([Pass(p, [], strokes, align)], marks)
 
 
 def test_pattern(p: Printer, size: float = 30.0) -> str:
