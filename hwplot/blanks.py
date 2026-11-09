@@ -19,7 +19,7 @@ import numpy as np
 from .page import PX_PER_MM, ink_mask
 from .solve import Answer
 
-MIN_LINE_MM = 10.0     # shorter than this is a dash or a letter, not a blank
+MIN_LINE_MM = 4.5      # shorter than this is a dash or a letter stroke, not a blank ("1.___" blanks run ~5 mm)
 MAX_LINE_THICK_MM = 1.4
 MIN_BOX_MM = (8.0, 5.0)
 SNAP_MM = 9.0          # how far an answer may move to reach a blank

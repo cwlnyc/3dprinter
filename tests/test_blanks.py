@@ -59,3 +59,11 @@ def test_circle_tightens_onto_the_printed_option():
     x, y, w, h = a.box
     assert w < 17 and h < 8
     assert 33 <= x < 35 and 125 <= y < 127  # hugs the printed "B) 11"
+
+
+def test_short_numbered_blanks_are_found():
+    # Vocabulary sheets use "1.___" blanks only about 5 mm long.
+    img = sheet()
+    cv2.line(img, (px(30), px(160)), (px(35.5), px(160)), (0, 0, 0), 2)
+    found = blanks.find_blanks(img)
+    assert any(b.kind == "line" and abs(b.y - 160) < 1 and abs(b.x - 30) < 1 for b in found)
