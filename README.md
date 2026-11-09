@@ -180,29 +180,38 @@ tell Claude "do my homework". Claude shows you the preview before it prints.
 
 **Setup, once:**
 
-1. Install and start the connector (leave it running):
+1. Install:
    ```bash
    python3 -m pip install -r requirements.txt
    ```
+2. Get `cloudflared` into your home folder (no Homebrew needed). Run
+   `uname -m`: `arm64` means Apple Silicon, `x86_64` means Intel.
+   ```bash
+   cd ~ && curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-arm64.tgz | tar -xz
+   ```
+   (On Intel, use `cloudflared-darwin-amd64.tgz` instead.)
+3. Put the permanent front door online at `hwplot-…pages.dev`, with your own
+   Cloudflare account. This needs Node, and logs you in to Cloudflare in the
+   browser if you aren't already:
+   ```bash
+   ./scripts/relay-deploy.sh
+   ```
+4. Start the connector, and leave the window open. It starts the tunnel
+   itself, tells the front door where your Mac is, and prints your connector
+   URL, which is the same every time:
    ```bash
    python3 -m hwplot mcp --photos ~/Library/Mobile\ Documents/com~apple~CloudDocs/Homework
    ```
-   It prints a URL ending in `/<secret>/mcp`. **Keep it private:** anyone
-   with it can print on your printer.
-2. Give it a public address with a Cloudflare tunnel, in a second terminal:
-   ```bash
-   brew install cloudflared
-   ```
-   ```bash
-   cloudflared tunnel --url http://localhost:8765
-   ```
-   It shows an address like `https://something.trycloudflare.com`. This quick
-   tunnel gets a new address every time it starts. For one that never changes,
-   use a named Cloudflare tunnel on a domain you have on Cloudflare.
-3. In Claude: **Settings → Connectors → Add custom connector**. Paste the
-   tunnel address followed by `/<secret>/mcp`.
-4. Plug the printer into the Mac with USB. Without it, the connector saves the
+5. In Claude: **Settings → Connectors → Add custom connector**, and paste that
+   URL. **Keep it private:** anyone with it can print on your printer.
+6. Plug the printer into the Mac with USB. Without it, the connector saves the
    G-code for the SD card instead.
+
+After that, starting the connector (step 4) is all you ever do.
+
+Without the front door, `python3 -m hwplot mcp` alone serves on
+`localhost:8765`, and any tunnel pointed at it works. The front door just keeps
+the address from changing.
 
 ### The paper jig
 

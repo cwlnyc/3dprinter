@@ -123,7 +123,7 @@ def cmd_blanks(a):
 
 def cmd_mcp(a):
     from .connector import run
-    run(a.workspace, a.photos, a.port, a.serial)
+    run(a.workspace, a.photos, a.port, a.serial, a.relay)
 
 
 def cmd_serve(a):
@@ -176,6 +176,7 @@ def main(argv=None):
     m.add_argument("--photos", default="", help="folder the homework photos are saved to (default: workspace/photos)")
     m.add_argument("--port", type=int, default=8765)
     m.add_argument("--serial", default="", help="printer's USB port, if it isn't found by itself")
+    m.add_argument("--relay", default="", help="your .pages.dev front door (remembered after the first time)")
     m.set_defaults(fn=cmd_mcp)
 
     v = sub.add_parser("serve")

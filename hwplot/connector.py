@@ -284,23 +284,97 @@ def create_server(workspace: str | os.PathLike = "workspace", photos: str | os.P
     return server
 
 
+def _config(workspace: str | os.PathLike) -> tuple[Path, dict]:
+    path = Path(workspace) / "connector.json"
+    return path, (json.loads(path.read_text()) if path.exists() else {})
+
+
+def _save_config(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2))
+    os.chmod(path, 0o600)
+
+
 def secret(workspace: str | os.PathLike) -> str:
     """The URL secret, made once and kept, so the connector's address stays the same."""
-    path = Path(workspace) / "connector.json"
-    data = json.loads(path.read_text()) if path.exists() else {}
+    path, data = _config(workspace)
     if not data.get("secret"):
         data["secret"] = secrets.token_urlsafe(24)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(data, indent=2))
-        os.chmod(path, 0o600)
+        data.setdefault("relay_project", "hwplot-" + secrets.token_hex(3))
+        _save_config(path, data)
     return data["secret"]
 
 
-def run(workspace: str = "workspace", photos: str = "", port: int = 8765, serial_port: str = "") -> None:
+TUNNEL_URL = __import__("re").compile(r"https://[a-z0-9-]+\.trycloudflare\.com")
+
+
+def find_cloudflared() -> str | None:
+    import shutil
+    for candidate in (shutil.which("cloudflared"), Path.home() / "cloudflared", Path.cwd() / "cloudflared"):
+        if candidate and Path(candidate).is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    return None
+
+
+def start_tunnel(port: int, binary: str, timeout: float = 60.0):
+    """Start a Cloudflare quick tunnel to localhost:port and return (process, its https address)."""
+    import subprocess
+    import threading
+
+    proc = subprocess.Popen([binary, "tunnel", "--no-autoupdate", "--url", f"http://localhost:{port}"],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    found: dict = {}
+    ready = threading.Event()
+
+    def watch():
+        for line in proc.stderr:  # keep reading for its whole life, or the pipe fills and it stalls
+            m = TUNNEL_URL.search(line)
+            if m and not found:
+                found["url"] = m.group(0)
+                ready.set()
+        ready.set()
+
+    threading.Thread(target=watch, daemon=True).start()
+    ready.wait(timeout)
+    if "url" not in found:
+        proc.terminate()
+        raise RuntimeError("cloudflared didn't report a tunnel address; run it by hand to see why")
+    return proc, found["url"]
+
+
+def register(relay: str, key: str, origin: str, tries: int = 6) -> None:
+    """Tell the .pages.dev front door where the Mac is now."""
+    import urllib.request
+
+    body = json.dumps({"origin": origin}).encode()
+    last = None
+    for attempt in range(tries):
+        try:
+            req = urllib.request.Request(f"{relay.rstrip('/')}/{key}/register", data=body, method="POST",
+                                         headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=15) as r:
+                if r.status == 200:
+                    return
+        except Exception as e:  # network hiccups while the tunnel settles: retry
+            last = e
+        time.sleep(2 * (attempt + 1))
+    raise RuntimeError(f"couldn't register with {relay}: {last}")
+
+
+def run(workspace: str = "workspace", photos: str = "", port: int = 8765, serial_port: str = "",
+        relay: str = "") -> None:
+    import threading
+
     import uvicorn
     from mcp.server.transport_security import TransportSecuritySettings
 
     key = secret(workspace)
+    path, data = _config(workspace)
+    relay = relay or data.get("relay", "")
+    if relay and data.get("relay") != relay:
+        data["relay"] = relay
+        _save_config(path, data)
+
     server = create_server(workspace, photos, serial_port)
     # The tunnel delivers requests with its own hostname, which the default
     # localhost-only check would refuse. The secret path does that job instead.
@@ -308,7 +382,29 @@ def run(workspace: str = "workspace", photos: str = "", port: int = 8765, serial
         streamable_http_path=f"/{key}/mcp",
         transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
     )
-    print(f"hwplot connector on http://localhost:{port}")
-    print(f"Connector URL (after starting the tunnel): https://<your tunnel address>/{key}/mcp")
-    print("Keep that URL private: anyone with it can print on your printer.")
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+
+    tunnel = None
+    if relay:
+        binary = find_cloudflared()
+        if not binary:
+            raise SystemExit("cloudflared not found: put it in your home folder or on your PATH (see the README).")
+        tunnel, origin = start_tunnel(port, binary)
+
+        def announce():
+            try:
+                register(relay, key, origin)
+                print(f"Connected. Connector URL (the same every time): {relay.rstrip('/')}/{key}/mcp")
+                print("Keep it private: anyone with it can print on your printer. Leave this window open.")
+            except RuntimeError as e:
+                print(f"Tunnel is up at {origin}, but {e}")
+
+        threading.Thread(target=announce, daemon=True).start()
+    else:
+        print(f"hwplot connector on http://localhost:{port}")
+        print(f"Connector URL (after starting a tunnel): https://<your tunnel address>/{key}/mcp")
+        print("Keep that URL private: anyone with it can print on your printer.")
+    try:
+        uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+    finally:
+        if tunnel:
+            tunnel.terminate()

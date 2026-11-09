@@ -151,3 +151,40 @@ def test_the_secret_is_made_once_and_kept(tmp_path):
 def test_lines_are_framed_the_way_marlin_checks_them():
     assert framed(1, "G28") == "N1 G28*18"
     assert commands("; header\nG28 ; home\n\nG1 X1\n") == ["G28", "G1 X1"]
+
+
+def test_the_tunnel_address_is_read_from_cloudflared(tmp_path):
+    fake = tmp_path / "cloudflared"
+    fake.write_text("#!/bin/sh\necho 'INF Requesting new quick Tunnel...' >&2\n"
+                    "echo '|  https://brave-lion-example.trycloudflare.com  |' >&2\nsleep 30\n")
+    fake.chmod(0o755)
+    proc, url = connector.start_tunnel(8765, str(fake), timeout=10)
+    proc.terminate()
+    assert url == "https://brave-lion-example.trycloudflare.com"
+
+
+def test_the_mac_registers_its_tunnel_with_the_front_door():
+    import http.server
+    got = {}
+
+    class FrontDoor(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            got["path"] = self.path
+            got["body"] = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b'{"ok": true}')
+
+        def log_message(self, *a):
+            pass
+
+    httpd = http.server.HTTPServer(("127.0.0.1", 0), FrontDoor)
+    threading.Thread(target=httpd.handle_request, daemon=True).start()
+    connector.register(f"http://127.0.0.1:{httpd.server_port}", "s3cret", "https://x.trycloudflare.com")
+    assert got == {"path": "/s3cret/register", "body": {"origin": "https://x.trycloudflare.com"}}
+
+
+def test_the_secret_comes_with_a_name_for_the_front_door(tmp_path):
+    connector.secret(tmp_path)
+    data = json.loads((tmp_path / "connector.json").read_text())
+    assert data["relay_project"].startswith("hwplot-")

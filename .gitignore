@@ -5,3 +5,5 @@ printer.json
 __pycache__/
 .pytest_cache/
 workspace/
+relay/wrangler.toml
+relay/.wrangler/
