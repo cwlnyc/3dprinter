@@ -82,7 +82,7 @@ def cmd_render(a, flat=None):
     if a.fit:
         printer = fit_paper(strokes, printer)
     try:
-        code = generate(strokes, printer)
+        code = generate(strokes, printer, marks=render.alignment_marks(answers))
     except OutOfReach as e:
         print("G-code not written:", e)
         return 1

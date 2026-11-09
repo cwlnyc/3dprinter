@@ -129,8 +129,8 @@ def test_fit_centres_the_pen_not_the_nozzle_when_the_pen_is_beside_it(hand):
     # Holder on the right side of the print head: pen 62 mm right of the nozzle.
     p = fit_paper(strokes, Printer(pen_offset_x=62.0))
     pen_xs = [p.paper_x + x for s in strokes for x, _ in s]
-    middle = (min(pen_xs) + max(pen_xs)) / 2
-    assert abs(middle - (62 + 220) / 2) < 0.2  # middle of the strip the pen can reach
+    assert 62 <= min(pen_xs) and max(pen_xs) <= 220  # inside the strip the pen can reach
+    assert 62 <= p.paper_x <= 220  # and the paper's corner is too, so it can be pointed at
     code = generate(strokes, p)
     for line in code.splitlines():
         if line.startswith(("G0 X", "G1 X")):
@@ -145,3 +145,34 @@ def test_pen_never_writes_off_the_edge_of_the_bed(hand):
     # Nozzle could reach, but the pen would be out past the bed's right edge.
     with pytest.raises(OutOfReach):
         generate(strokes, Printer(pen_offset_x=62.0, paper_x=125.0, paper_y=200.0))
+
+
+def test_paper_is_placed_so_its_corner_can_be_pointed_at(hand):
+    h, _ = hand
+    # Like the Spanish vocab sheets: two answer columns down most of the page.
+    answers = [Answer(str(i), "q", "A", "write", (x, y, 6.0, 4.4), "high", "line")
+               for i, (x, y) in enumerate([(25, 55), (108, 55), (25, 190), (108, 190)])]
+    strokes = render.render_answers(answers, h)
+    me = Printer(pen_offset_x=77.9, pen_offset_y=-12.2, z_down=1.7, z_up=4.7)
+    p = fit_paper(strokes, me)
+    code = generate(strokes, p)
+    assert "Corner under pen" in code and "Left edge under pen" in code
+    # the corner stop really puts the pen over the corner
+    corner_nozzle = p.to_bed(0, 0)
+    assert f"G0 X{corner_nozzle[0]:.2f} Y{corner_nozzle[1]:.2f}" in code
+    # and it hovers just above the paper rather than touching it
+    assert "G0 Z2.70" in code
+
+
+def test_when_the_corner_is_out_of_reach_the_pen_points_at_the_first_blank(hand):
+    h, _ = hand
+    # Answers from near the top to near the bottom: too tall for the corner to be in reach too.
+    answers = [Answer("1", "q", "A", "write", (30.0, 60.0, 6.0, 4.4), "high", "line"),
+               Answer("2", "q", "B", "write", (30.0, 212.0, 6.0, 4.4), "high", "line")]
+    strokes = render.render_answers(answers, h)
+    p = fit_paper(strokes, Printer(pen_offset_x=77.9, pen_offset_y=-12.2, z_down=1.7, z_up=4.7))
+    code = generate(strokes, p, marks=render.alignment_marks(answers))
+    assert "Corner under pen" not in code
+    assert "M0 Pen at blank 1" in code
+    nozzle = p.to_bed(29.0, 64.4)  # where blank 1's line starts
+    assert f"G0 X{nozzle[0]:.2f} Y{nozzle[1]:.2f}" in code

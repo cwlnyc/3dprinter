@@ -85,11 +85,25 @@ def check_reach(strokes: list[Polyline], p: Printer) -> None:
         )
 
 
-def fit_paper(strokes: list[Polyline], p: Printer) -> Printer:
+def _settle(centred: float, allowed: tuple[float, float], preferred: tuple[float, float]) -> float:
+    """centred, moved as little as possible into allowed, and into preferred too if both can hold."""
+    lo, hi = allowed
+    if lo > hi:  # answers wider than the reach; check_reach will say so
+        return centred
+    plo, phi = max(lo, preferred[0]), min(hi, preferred[1])
+    if plo <= phi:
+        lo, hi = plo, phi
+    return min(max(centred, lo), hi)
+
+
+def fit_paper(strokes: list[Polyline], p: Printer, margin: float = 2.0) -> Printer:
     """Choose paper_x / paper_y so the answers sit in the middle of where the pen can write.
 
     A Letter page is taller than most beds, so the page usually overhangs. That
-    is fine: only the parts with answers need to be under the pen.
+    is fine: only the parts with answers need to be under the pen. Where there
+    is room to choose, the paper is placed so its top-left corner is also in
+    reach, because that is the point the printer shows you to line the paper
+    up against (see generate).
     """
     xs = [x for s in strokes for x, _ in s]
     ys = [y for s in strokes for _, y in s]
@@ -97,29 +111,68 @@ def fit_paper(strokes: list[Polyline], p: Printer) -> Printer:
         return p
     cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
     (x0, x1), (y0, y1) = pen_range(p)
+    x0, x1, y0, y1 = x0 + margin, x1 - margin, y0 + margin, y1 - margin
     q = Printer(**asdict(p))
-    q.paper_x = round((x0 + x1) / 2 - cx, 1)
-    q.paper_y = round((y0 + y1) / 2 + cy, 1)
+    # pen X of a point = paper_x + x; pen Y = paper_y - y (page y runs down, bed Y runs back)
+    q.paper_x = round(_settle((x0 + x1) / 2 - cx, (x0 - min(xs), x1 - max(xs)), (x0, x1)), 1)
+    q.paper_y = round(_settle((y0 + y1) / 2 + cy, (y0 + max(ys), y1 + min(ys)), (y0, y1)), 1)
     return q
 
 
-def generate(strokes: list[Polyline], p: Printer, align: bool = True) -> str:
+def _reachable(p: Printer, page_x: float, page_y: float) -> bool:
+    (x0, x1), (y0, y1) = pen_range(p)
+    return x0 <= p.paper_x + page_x <= x1 and y0 <= p.paper_y - page_y <= y1
+
+
+def _say(p: Printer, msg: str) -> list[str]:
+    """Show msg on the printer's screen while it waits for the knob."""
+    return [f"M117 {msg}", f"M0 {msg}" if p.pause.strip().upper() == "M0" else p.pause]
+
+
+Mark = tuple[float, float, str]  # page x, page y (mm), what to line up there
+
+
+def alignment(p: Printer, marks: list[Mark] | None = None) -> list[str]:
+    """Stops where the pen hovers over the paper, for lining the sheet up.
+
+    One stop fixes where the sheet sits: its top-left corner, or, when the
+    answers run too far down the page for the corner to be in reach, a mark on
+    the sheet itself such as the start of the first answer line. A second stop
+    well down the left edge fixes its angle. The pen hovers 1 mm above the
+    paper so the gap is easy to judge without marking anything. Messages are
+    short because the screen shows about 20 characters.
+    """
+    hover = p.z_down + 1.0
+    stops = []
+    if _reachable(p, 0, 0):
+        stops.append(((0.0, 0.0), "Corner under pen"))
+    else:
+        mark = next(((x, y, m) for x, y, m in marks or [] if _reachable(p, x, y)), None)
+        if mark:
+            stops.append(((mark[0], mark[1]), mark[2][:20]))
+    edge = next((d for d in range(200, 59, -10) if _reachable(p, 0, d)), None)
+    if edge is not None:
+        stops.append(((0.0, float(edge)), "Left edge under pen"))
+    out = []
+    for (px, py), msg in stops:
+        x, y = p.to_bed(px, py)
+        out += [f"; alignment stop: page ({px:.0f}, {py:.0f}) mm",
+                f"G0 Z{p.z_up:.2f} F{p.feed_z}", f"G0 X{x:.2f} Y{y:.2f} F{p.feed_travel}",
+                f"G0 Z{hover:.2f} F{p.feed_z}", *_say(p, msg), f"G0 Z{p.z_up:.2f} F{p.feed_z}"]
+    if not stops:
+        out += ["; the paper's left edge is out of the pen's reach: place it by measurement", *_say(p, "Place paper, click")]
+    return out
+
+
+def generate(strokes: list[Polyline], p: Printer, align: bool = True, marks: list[Mark] | None = None) -> str:
     check_reach(strokes, p)
     out = ["; homework-plotter", f"; paper top-left corner at bed X{p.paper_x} Y{p.paper_y} (pen position)"]
     out += p.start.format(**asdict(p)).splitlines()
     out.append(f"G0 Z{p.z_up + 10:.2f} F{p.feed_z}")
     if align:
-        cx, cy = p.to_bed(0, 0)
-        if 0 <= cx <= p.bed_x and 0 <= cy <= p.bed_y:
-            out += [
-                f"G0 X{cx:.2f} Y{cy:.2f} F{p.feed_travel}",
-                f"G0 Z{p.z_up:.2f} F{p.feed_z}",
-                "; line the paper's top-left corner up under the pen tip, then resume",
-                p.pause,
-            ]
-        else:
-            out += ["; paper corner is off the bed - place the paper by measurement", p.pause]
+        out += alignment(p, marks)
     out.append(f"G0 Z{p.z_up:.2f} F{p.feed_z}")
+    out.append("M117 Writing")
     for s in strokes:
         if not s:
             continue

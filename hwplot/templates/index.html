@@ -146,7 +146,7 @@
       <div class="row"><button {{ 'disabled' if not hand }}>Solve it</button>{% if not hand %}<span class="lead">Do step 1 first.</span>{% endif %}</div>
     </form>
   </div>
-  <details style="margin-top:1rem">
+  <details style="margin-top:1rem" {{ 'open' if import_open }}>
     <summary><strong>Already have the answers?</strong> Drop in the sheet's folder</summary>
     <p class="lead">If a sheet was solved somewhere else, such as in a Claude chat, you get a folder with its photo and <code>answers.json</code> inside. Drop that folder here, one sheet at a time. The answers only line up with the photo in that folder, so don't swap in a retaken one.</p>
     <form method="post" action="/import" enctype="multipart/form-data" data-busy="Drawing the answers…" id="importform">
@@ -165,7 +165,7 @@
       <div class="grid">
         <div><label>Paper size</label><select name="paper"><option value="letter" {{ 'selected' if paper=='letter' }}>US Letter</option><option value="a4" {{ 'selected' if paper=='a4' }}>A4</option></select></div>
       </div>
-      <div class="row"><button {{ 'disabled' if not hand }}>Write these answers</button></div>
+      <div class="row"><button {{ 'disabled' if not hand }}>Write these answers</button>{% if not hand %}<span class="lead">No handwriting found: do step 1 first (or start the program from the same folder as before, since it keeps your handwriting in <code>workspace/</code> there).</span>{% endif %}</div>
     </form>
     <script>
       (() => {
@@ -184,12 +184,30 @@
         });
         ["dragenter", "dragover"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add("over"); }));
         drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+        const problem = (msg) => { names.textContent = msg; names.classList.add("bad"); };
         drop.addEventListener("drop", async (e) => {
-          e.preventDefault(); drop.classList.remove("over");
-          const entries = [...e.dataTransfer.items].map((i) => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
-          const files = entries.length ? (await Promise.all(entries.map(walk))).flat() : [...e.dataTransfer.files];
-          const dt = new DataTransfer(); files.forEach((f) => dt.items.add(f));
-          input.files = dt.files; show();
+          e.preventDefault(); drop.classList.remove("over"); names.classList.remove("bad");
+          try {
+            const entries = [...e.dataTransfer.items].map((i) => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
+            const files = (entries.length ? (await Promise.all(entries.map(walk))).flat() : [...e.dataTransfer.files])
+              .filter((f) => !f.name.startsWith("."));
+            if (!files.length) return problem("Couldn't read that folder by dragging. Click here and choose it instead.");
+            const dt = new DataTransfer(); files.forEach((f) => dt.items.add(f));
+            input.files = dt.files; show();
+          } catch (err) {
+            problem("This browser won't take a dragged folder. Click here and choose it instead.");
+          }
+        });
+        // Say what's missing here, instead of sending an empty form and reloading.
+        document.getElementById("importform").addEventListener("submit", (e) => {
+          const form = e.target;
+          const picked = [...input.files].filter((f) => !f.name.startsWith(".")).length
+            + form.homework.files.length + form.answers.files.length;
+          if (!picked) {
+            e.preventDefault(); e.stopImmediatePropagation();
+            problem("Nothing chosen yet: drop the sheet's folder here, or click to choose it.");
+            drop.scrollIntoView({ block: "center" });
+          }
         });
       })();
     </script>

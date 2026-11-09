@@ -21,7 +21,12 @@
         <li>Lay the homework face up, <strong>top edge towards the back</strong> of the printer. Its top-left corner goes at bed <strong>X {{ placement[0] }}, Y {{ placement[1] }}</strong>. A Letter page is bigger than most beds, so it will hang over the edge. That's fine: the answers are centred on the bed.
           {% if placement[0]|float < 0 %}<br>Negative X means the corner sits <strong>{{ '%.1f'|format(-(placement[0]|float)) }} mm left of the bed's left edge</strong>, past where the pen can reach. Measure it with a ruler from the edge of the bed.{% endif %}</li>
         <li>Tape the corners down so it can't slide.</li>
-        <li>Start the print. It homes, moves the pen over the paper's top-left corner (if that's on the bed) and <strong>pauses</strong>. Slide the paper until the corner is right under the pen tip, then resume.</li>
+        <li>Start the print. After homing it makes <strong>two stops</strong>, with the pen hovering just above the paper. The screen says what to line up:
+          <ul>
+            <li><strong>"Corner under pen"</strong> (or <strong>"Pen at blank …"</strong> when the answers run too far down the page for the corner to be in reach): slide the paper until that spot is right under the pen tip, then press the knob.</li>
+            <li><strong>"Left edge under pen"</strong>: without moving the first spot, turn the paper slightly until its left edge is under the pen tip. That squares it up. Tape it down, then press the knob.</li>
+          </ul>
+        </li>
         <li>Stay nearby for the first few letters.</li>
       </ol>
       {% elif not has_gcode %}

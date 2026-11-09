@@ -94,7 +94,7 @@ def create_app(workspace: str | os.PathLike = "workspace") -> Flask:
         if fit:
             p = fit_paper(strokes, p)
         try:
-            (out / "answers.gcode").write_text(generate(strokes, p))
+            (out / "answers.gcode").write_text(generate(strokes, p, marks=render.alignment_marks(answers)))
             (out / "placement.txt").write_text(f"{p.paper_x} {p.paper_y}")
         except OutOfReach as e:
             (out / "answers.gcode").unlink(missing_ok=True)
@@ -118,6 +118,7 @@ def create_app(workspace: str | os.PathLike = "workspace") -> Flask:
             paper=state["paper"],
             models=solve.MODELS,
             model=state["model"],
+            import_open=bool(request.args.get("import_open")),
             has_results=answers_path.exists(),
             has_gcode=(out / "answers.gcode").exists(),
             placement=placement,
@@ -269,7 +270,7 @@ def create_app(workspace: str | os.PathLike = "workspace") -> Flask:
             except (ValueError, KeyError, TypeError) as e:
                 answers_path.unlink(missing_ok=True)
                 flash(f"Couldn't use that answers file: {e}", "error")
-        return redirect(url_for("index") + "#step4")
+        return redirect(url_for("index", import_open=1) + "#importform")
 
     @app.post("/solve")
     def do_solve():

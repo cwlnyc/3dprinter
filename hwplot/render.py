@@ -162,3 +162,10 @@ def specimen(hand: Hand, chars: str, cols: int = 16, cell_mm: float = 9.0, cap_m
             cv2.rectangle(img, (round(x * PX_PER_MM), round(y * PX_PER_MM)),
                           (round((x + cell_mm - 1) * PX_PER_MM), round((y + cell_mm) * PX_PER_MM)), (60, 60, 220), 2)
     return overlay(img, strokes)
+
+
+def alignment_marks(answers: list[Answer]) -> list[tuple[float, float, str]]:
+    """Printed spots worth lining the paper up against: the start of each answer line, top first."""
+    lines = sorted((a for a in answers if a.target == "line"), key=lambda a: (a.box[1], a.box[0]))
+    # A snapped box starts 1 mm in from the line and sits on it (see blanks.snap).
+    return [(a.box[0] - 1.0, a.box[1] + a.box[3], f"Pen at blank {a.id}") for a in lines]
