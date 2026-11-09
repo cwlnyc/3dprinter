@@ -128,7 +128,7 @@ def test_fit_centres_the_pen_not_the_nozzle_when_the_pen_is_beside_it(hand):
     strokes = render.render_answers(answers, h)
     # Holder on the right side of the print head: pen 62 mm right of the nozzle.
     p = fit_paper(strokes, Printer(pen_offset_x=62.0))
-    pen_xs = [p.paper_x + x for s in strokes for x, _ in s]
+    pen_xs = [p.pen(x, y)[0] for s in strokes for x, y in s]
     assert 62 <= min(pen_xs) and max(pen_xs) <= 220  # inside the strip the pen can reach
     assert 62 <= p.paper_x <= 220  # and the paper's corner is too, so it can be pointed at
     code = generate(strokes, p)
@@ -156,12 +156,12 @@ def test_paper_is_placed_so_its_corner_can_be_pointed_at(hand):
     me = Printer(pen_offset_x=77.9, pen_offset_y=-12.2, z_down=1.7, z_up=4.7)
     p = fit_paper(strokes, me)
     code = generate(strokes, p)
-    assert "Corner under pen" in code and "Left edge under pen" in code
+    assert "Top-left corner here" in code and "Left edge under pen" in code
     # the corner stop really puts the pen over the corner
     corner_nozzle = p.to_bed(0, 0)
     assert f"G0 X{corner_nozzle[0]:.2f} Y{corner_nozzle[1]:.2f}" in code
-    # and it hovers just above the paper rather than touching it
-    assert "G0 Z2.70" in code
+    # and it hovers clear of the paper rather than touching it
+    assert "G0 Z3.70" in code
 
 
 def test_when_the_corner_is_out_of_reach_the_pen_points_at_the_first_blank(hand):
@@ -172,7 +172,30 @@ def test_when_the_corner_is_out_of_reach_the_pen_points_at_the_first_blank(hand)
     strokes = render.render_answers(answers, h)
     p = fit_paper(strokes, Printer(pen_offset_x=77.9, pen_offset_y=-12.2, z_down=1.7, z_up=4.7))
     code = generate(strokes, p, marks=render.alignment_marks(answers))
-    assert "Corner under pen" not in code
+    assert "Top-left corner here" not in code
     assert "M0 Pen at blank 1" in code
     nozzle = p.to_bed(29.0, 64.4)  # where blank 1's line starts
     assert f"G0 X{nozzle[0]:.2f} Y{nozzle[1]:.2f}" in code
+
+
+def test_sheet_is_turned_round_when_that_keeps_it_off_the_frame(hand):
+    h, _ = hand
+    # Answers in the left half of the page, pen far to the right of the nozzle:
+    # the right-hand side of the page used to hang ~7 cm off the bed into the upright.
+    answers = [Answer(str(i), "q", "A", "write", (x, y, 6.0, 4.4), "high", "line")
+               for i, (x, y) in enumerate([(25, 60), (115, 60), (25, 200), (115, 200)])]
+    strokes = render.render_answers(answers, h)
+    me = Printer(pen_offset_x=77.9, pen_offset_y=-12.2, z_down=1.7, z_up=4.7)
+    p = fit_paper(strokes, me)
+    assert p.paper_flipped
+    lo, hi = p.paper_x - 215.9, p.paper_x
+    assert hi <= me.bed_x + 1 and lo >= -25  # barely off the bed's sides now
+    code = generate(strokes, p, marks=render.alignment_marks(answers))
+    pen_xs = [p.pen(x, y)[0] for s in strokes for x, y in s]
+    assert min(pen_xs) >= 77.9 and max(pen_xs) <= 220
+    assert "TURNED" not in code and "FRONT" in code  # the file says which way round
+
+
+def test_travel_never_skims_the_paper():
+    p = Printer(z_down=1.7, z_up=2.2)
+    assert p.travel_z >= 1.7 + 4.5

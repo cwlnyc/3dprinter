@@ -140,10 +140,10 @@ def create_app(workspace: str | os.PathLike = "workspace") -> Flask:
         (out / "answers.svg").write_text(render.svg(strokes, page_mm()))
         p = load_printer()
         if fit:
-            p = fit_paper(strokes, p)
+            p = fit_paper(strokes, p, page_w=page_mm()[0])
         try:
             (out / "answers.gcode").write_text(generate(strokes, p, marks=render.alignment_marks(answers)))
-            (out / "placement.txt").write_text(f"{p.paper_x} {p.paper_y}")
+            (out / "placement.txt").write_text(f"{p.paper_x} {p.paper_y} {'flipped' if p.paper_flipped else 'upright'}")
         except OutOfReach as e:
             (out / "answers.gcode").unlink(missing_ok=True)
             msgs.append(f"G-code not made: {e}")

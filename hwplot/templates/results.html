@@ -18,13 +18,17 @@
       <h3>Printing</h3>
       <ol>
         <li>Put the G-code on the printer's SD card (or send it with OctoPrint / Mainsail).</li>
-        <li>Lay the homework face up, <strong>top edge towards the back</strong> of the printer. Its top-left corner goes at bed <strong>X {{ placement[0] }}, Y {{ placement[1] }}</strong>. A Letter page is bigger than most beds, so it will hang over the edge. That's fine: the answers are centred on the bed.
-          {% if placement[0]|float < 0 %}<br>Negative X means the corner sits <strong>{{ '%.1f'|format(-(placement[0]|float)) }} mm left of the bed's left edge</strong>, past where the pen can reach. Measure it with a ruler from the edge of the bed.{% endif %}</li>
-        <li>Tape the corners down so it can't slide.</li>
+        {% if placement|length > 2 and placement[2] == 'flipped' %}
+        <li><strong>Turn the sheet round:</strong> face up, with its <strong>title (top edge) towards the front</strong> of the printer, so the page's top-left corner is at the front right. The pen only reaches the right part of the bed, and this way round the blank side of the page lies on the bed instead of hanging off the side into the frame.</li>
+        {% else %}
+        <li>Lay the homework face up, <strong>top edge towards the back</strong> of the printer.</li>
+        {% endif %}
+        <li>Its top-left corner goes at bed <strong>X {{ placement[0] }}, Y {{ placement[1] }}</strong>; the printer will point at it (or at an answer line) for you. The page hangs off the front and back of the bed, which is fine.</li>
+        <li><strong>Tape it down along every edge that's on the bed</strong> (painter's tape), and where it crosses the bed's edge, so nothing can lift. Before starting, slide the bed front to back by hand and check the overhang doesn't catch on anything.</li>
         <li>Start the print. After homing it makes <strong>two stops</strong>, with the pen hovering just above the paper. The screen says what to line up:
           <ul>
-            <li><strong>"Corner under pen"</strong> (or <strong>"Pen at blank …"</strong> when the answers run too far down the page for the corner to be in reach): slide the paper until that spot is right under the pen tip, then press the knob.</li>
-            <li><strong>"Left edge under pen"</strong>: without moving the first spot, turn the paper slightly until its left edge is under the pen tip. That squares it up. Tape it down, then press the knob.</li>
+            <li><strong>"Top-left corner here"</strong> (or <strong>"Pen at blank …"</strong> when the corner is out of reach): slide the paper until that spot is right under the pen tip, then press the knob.</li>
+            <li><strong>"Left edge under pen"</strong> or <strong>"Turn: blank …"</strong>: without moving the first spot, turn the paper slightly until that edge or answer line is under the pen tip. (It means the page's own left edge, which is on your right when the sheet is turned round.) That squares it up. Tape it down, then press the knob.</li>
           </ul>
         </li>
         <li>Stay nearby for the first few letters.</li>

@@ -80,7 +80,7 @@ def cmd_render(a, flat=None):
 
     printer = Printer.load(a.printer) if a.printer and os.path.exists(a.printer) else Printer()
     if a.fit:
-        printer = fit_paper(strokes, printer)
+        printer = fit_paper(strokes, printer, page_w=page_mm[0])
     try:
         code = generate(strokes, printer, marks=render.alignment_marks(answers))
     except OutOfReach as e:
@@ -89,7 +89,8 @@ def cmd_render(a, flat=None):
     with open(os.path.join(a.out_dir, "answers.gcode"), "w") as f:
         f.write(code)
     print(f"wrote preview.png, answers.svg, answers.gcode in {a.out_dir}")
-    print(f"place the paper with its top-left corner under the pen at bed X{printer.paper_x} Y{printer.paper_y}, top edge to the back")
+    turn = "TURNED ROUND, top edge to the front" if printer.paper_flipped else "top edge to the back"
+    print(f"place the paper {turn}, its top-left corner under the pen at bed X{printer.paper_x} Y{printer.paper_y}")
     return 0
 
 

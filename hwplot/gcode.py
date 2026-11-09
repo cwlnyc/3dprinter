@@ -18,14 +18,18 @@ class Printer:
     bed_x: float = 220.0
     bed_y: float = 220.0
     # Bed coordinates (mm) of the paper's top-left corner, as seen by the PEN.
-    # The paper's top edge faces the back of the printer (+Y).
+    # The paper's top edge faces the back of the printer (+Y) unless flipped,
+    # when the sheet is turned round: top edge to the front, top-left corner at
+    # the front right. fit_paper flips it when that keeps the sheet from
+    # hanging off the bed's side, since the pen only reaches one side of it.
     paper_x: float = 0.0
     paper_y: float = 279.4
+    paper_flipped: bool = False
     # Pen tip minus nozzle position. Measure: draw a dot, compare to the nozzle.
     pen_offset_x: float = 0.0
     pen_offset_y: float = 0.0
     z_down: float = 0.0       # Z at which the pen touches paper (spring slightly compressed)
-    z_up: float = 3.0         # Z for travel moves
+    z_up: float = 3.0         # Z for travel moves (never less than TRAVEL_CLEARANCE above z_down)
     feed_draw: int = 1500     # mm/min
     feed_travel: int = 6000
     feed_z: int = 900
@@ -42,9 +46,25 @@ class Printer:
         with open(path, "w") as f:
             json.dump(asdict(self), f, indent=2)
 
+    def pen(self, x: float, y: float) -> tuple[float, float]:
+        """Page mm (origin top-left, y down) to where that spot sits on the bed."""
+        if self.paper_flipped:
+            return self.paper_x - x, self.paper_y + y
+        return self.paper_x + x, self.paper_y - y
+
     def to_bed(self, x: float, y: float) -> tuple[float, float]:
-        """Page mm (origin top-left, y down) to the nozzle position that puts the pen there."""
-        return self.paper_x + x - self.pen_offset_x, self.paper_y - y - self.pen_offset_y
+        """Page mm to the nozzle position that puts the pen there."""
+        px, py = self.pen(x, y)
+        return px - self.pen_offset_x, py - self.pen_offset_y
+
+    @property
+    def travel_z(self) -> float:
+        # Paper that has lifted a little must not catch the pen between strokes:
+        # a caught sheet gets dragged and scrunched, and the pen writes on it wherever it ends up.
+        return max(self.z_up, self.z_down + TRAVEL_CLEARANCE)
+
+
+TRAVEL_CLEARANCE = 4.5  # mm above pen-down for moves between strokes
 
 
 class OutOfReach(ValueError):
@@ -64,7 +84,7 @@ def pen_range(p: Printer) -> tuple[tuple[float, float], tuple[float, float]]:
 
 
 def _pen_points(strokes: list[Polyline], p: Printer) -> list[tuple[float, float]]:
-    return [(p.paper_x + x, p.paper_y - y) for s in strokes for x, y in s]
+    return [p.pen(x, y) for s in strokes for x, y in s]
 
 
 def check_reach(strokes: list[Polyline], p: Printer) -> None:
@@ -96,14 +116,23 @@ def _settle(centred: float, allowed: tuple[float, float], preferred: tuple[float
     return min(max(centred, lo), hi)
 
 
-def fit_paper(strokes: list[Polyline], p: Printer, margin: float = 2.0) -> Printer:
-    """Choose paper_x / paper_y so the answers sit in the middle of where the pen can write.
+def _overhang(lo: float, hi: float, p: Printer) -> float:
+    """How far a sheet spanning lo..hi (bed X) hangs off the bed's sides.
 
-    A Letter page is taller than most beds, so the page usually overhangs. That
-    is fine: only the parts with answers need to be under the pen. Where there
-    is room to choose, the paper is placed so its top-left corner is also in
-    reach, because that is the point the printer shows you to line the paper
-    up against (see generate).
+    Off the front or back is harmless; off the sides it runs into the frame's
+    uprights as the bed slides, and the sheet buckles.
+    """
+    return max(0.0, -lo) + max(0.0, hi - p.bed_x)
+
+
+def fit_paper(strokes: list[Polyline], p: Printer, margin: float = 2.0, page_w: float = 215.9) -> Printer:
+    """Choose where the paper goes so the answers sit in the middle of where the pen can write.
+
+    A Letter page is taller than most beds, so the page overhangs front and
+    back; that is fine. What is not fine is overhanging the sides, so both ways
+    round are tried and the one hanging off the sides less is used. Where there
+    is room to choose, the paper is also placed so its top-left corner is in
+    reach, because that is the point the printer shows you to line up against.
     """
     xs = [x for s in strokes for x, _ in s]
     ys = [y for s in strokes for _, y in s]
@@ -112,16 +141,34 @@ def fit_paper(strokes: list[Polyline], p: Printer, margin: float = 2.0) -> Print
     cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
     (x0, x1), (y0, y1) = pen_range(p)
     x0, x1, y0, y1 = x0 + margin, x1 - margin, y0 + margin, y1 - margin
-    q = Printer(**asdict(p))
-    # pen X of a point = paper_x + x; pen Y = paper_y - y (page y runs down, bed Y runs back)
-    q.paper_x = round(_settle((x0 + x1) / 2 - cx, (x0 - min(xs), x1 - max(xs)), (x0, x1)), 1)
-    q.paper_y = round(_settle((y0 + y1) / 2 + cy, (y0 + max(ys), y1 + min(ys)), (y0, y1)), 1)
-    return q
+
+    options = []
+    for flipped in (False, True):
+        q = Printer(**asdict(p))
+        q.paper_flipped = flipped
+        if not flipped:  # pen X = paper_x + x, pen Y = paper_y - y
+            q.paper_x = round(_settle((x0 + x1) / 2 - cx, (x0 - min(xs), x1 - max(xs)), (x0, x1)), 1)
+            q.paper_y = round(_settle((y0 + y1) / 2 + cy, (y0 + max(ys), y1 + min(ys)), (y0, y1)), 1)
+            span = (q.paper_x, q.paper_x + page_w)
+        else:  # pen X = paper_x - x, pen Y = paper_y + y
+            q.paper_x = round(_settle((x0 + x1) / 2 + cx, (x0 + max(xs), x1 + min(xs)), (x0, x1)), 1)
+            q.paper_y = round(_settle((y0 + y1) / 2 - cy, (y0 - min(ys), y1 - max(ys)), (y0, y1)), 1)
+            span = (q.paper_x - page_w, q.paper_x)
+        try:
+            check_reach(strokes, q)
+            fits = True
+        except OutOfReach:
+            fits = False
+        options.append((not fits, _overhang(*span, p) - (0 if not flipped else 5.0), flipped, q))
+    # Fits first, then least side overhang; turning the sheet round has to save
+    # more than 5 mm to be worth the oddness of placing it upside down.
+    return min(options, key=lambda o: (o[0], o[1], o[2]))[3]
 
 
 def _reachable(p: Printer, page_x: float, page_y: float) -> bool:
     (x0, x1), (y0, y1) = pen_range(p)
-    return x0 <= p.paper_x + page_x <= x1 and y0 <= p.paper_y - page_y <= y1
+    bx, by = p.pen(page_x, page_y)
+    return x0 <= bx <= x1 and y0 <= by <= y1
 
 
 def _say(p: Printer, msg: str) -> list[str]:
@@ -135,43 +182,50 @@ Mark = tuple[float, float, str]  # page x, page y (mm), what to line up there
 def alignment(p: Printer, marks: list[Mark] | None = None) -> list[str]:
     """Stops where the pen hovers over the paper, for lining the sheet up.
 
-    One stop fixes where the sheet sits: its top-left corner, or, when the
-    answers run too far down the page for the corner to be in reach, a mark on
-    the sheet itself such as the start of the first answer line. A second stop
-    well down the left edge fixes its angle. The pen hovers 1 mm above the
-    paper so the gap is easy to judge without marking anything. Messages are
-    short because the screen shows about 20 characters.
+    The first stop fixes where the sheet sits: its top-left corner, or when that
+    is out of reach, a printed mark such as the start of an answer line. The
+    second fixes its angle: a point well down the left edge, or else a second
+    mark far from the first. The pen hovers 2 mm above the pen-down height,
+    clear of the sheet as it is slid underneath, but close enough to judge.
+    Messages are short because the screen shows about 20 characters.
     """
-    hover = p.z_down + 1.0
+    hover = p.z_down + 2.0
+    reachable = [(x, y, m) for x, y, m in marks or [] if _reachable(p, x, y)]
     stops = []
     if _reachable(p, 0, 0):
-        stops.append(((0.0, 0.0), "Corner under pen"))
-    else:
-        mark = next(((x, y, m) for x, y, m in marks or [] if _reachable(p, x, y)), None)
-        if mark:
-            stops.append(((mark[0], mark[1]), mark[2][:20]))
+        stops.append(((0.0, 0.0), "Top-left corner here"))
+    elif reachable:
+        x, y, m = reachable[0]
+        stops.append(((x, y), m))
     edge = next((d for d in range(200, 59, -10) if _reachable(p, 0, d)), None)
     if edge is not None:
         stops.append(((0.0, float(edge)), "Left edge under pen"))
+    elif stops and reachable:
+        (ax, ay) = stops[0][0]
+        far = max(reachable, key=lambda r: (r[0] - ax) ** 2 + (r[1] - ay) ** 2)
+        if (far[0] - ax) ** 2 + (far[1] - ay) ** 2 >= 40 ** 2:
+            stops.append(((far[0], far[1]), ("Turn: " + far[2].replace("Pen at ", ""))))
     out = []
     for (px, py), msg in stops:
         x, y = p.to_bed(px, py)
         out += [f"; alignment stop: page ({px:.0f}, {py:.0f}) mm",
-                f"G0 Z{p.z_up:.2f} F{p.feed_z}", f"G0 X{x:.2f} Y{y:.2f} F{p.feed_travel}",
-                f"G0 Z{hover:.2f} F{p.feed_z}", *_say(p, msg), f"G0 Z{p.z_up:.2f} F{p.feed_z}"]
+                f"G0 Z{p.travel_z:.2f} F{p.feed_z}", f"G0 X{x:.2f} Y{y:.2f} F{p.feed_travel}",
+                f"G0 Z{hover:.2f} F{p.feed_z}", *_say(p, msg[:20]), f"G0 Z{p.travel_z:.2f} F{p.feed_z}"]
     if not stops:
-        out += ["; the paper's left edge is out of the pen's reach: place it by measurement", *_say(p, "Place paper, click")]
+        out += ["; nothing on the sheet is in the pen's reach to line up against: place it by measurement",
+                *_say(p, "Place paper, click")]
     return out
 
 
 def generate(strokes: list[Polyline], p: Printer, align: bool = True, marks: list[Mark] | None = None) -> str:
     check_reach(strokes, p)
-    out = ["; homework-plotter", f"; paper top-left corner at bed X{p.paper_x} Y{p.paper_y} (pen position)"]
+    turn = "top edge to the FRONT (turned round)" if p.paper_flipped else "top edge to the back"
+    out = ["; homework-plotter", f"; paper top-left corner at bed X{p.paper_x} Y{p.paper_y} (pen position), {turn}"]
     out += p.start.format(**asdict(p)).splitlines()
-    out.append(f"G0 Z{p.z_up + 10:.2f} F{p.feed_z}")
+    out.append(f"G0 Z{p.travel_z + 10:.2f} F{p.feed_z}")
     if align:
         out += alignment(p, marks)
-    out.append(f"G0 Z{p.z_up:.2f} F{p.feed_z}")
+    out.append(f"G0 Z{p.travel_z:.2f} F{p.feed_z}")
     out.append("M117 Writing")
     for s in strokes:
         if not s:
@@ -182,7 +236,7 @@ def generate(strokes: list[Polyline], p: Printer, align: bool = True, marks: lis
         for px, py in s[1:]:
             x, y = p.to_bed(px, py)
             out.append(f"G1 X{x:.2f} Y{y:.2f} F{p.feed_draw}")
-        out.append(f"G0 Z{p.z_up:.2f} F{p.feed_z}")
+        out.append(f"G0 Z{p.travel_z:.2f} F{p.feed_z}")
     out += p.end.format(**asdict(p)).splitlines()
     return "\n".join(out) + "\n"
 
@@ -203,13 +257,13 @@ def test_pattern(p: Printer, size: float = 30.0) -> str:
     ]
     out = ["; homework-plotter test pattern: 30 mm square and cross at bed centre"]
     out += p.start.format(**asdict(p)).splitlines()
-    out.append(f"G0 Z{p.z_up + 10:.2f} F{p.feed_z}")
+    out.append(f"G0 Z{p.travel_z + 10:.2f} F{p.feed_z}")
     for line in lines:
         x, y = line[0]
         out.append(f"G0 X{x - p.pen_offset_x:.2f} Y{y - p.pen_offset_y:.2f} F{p.feed_travel}")
         out.append(f"G1 Z{p.z_down:.2f} F{p.feed_z}")
         for x, y in line[1:]:
             out.append(f"G1 X{x - p.pen_offset_x:.2f} Y{y - p.pen_offset_y:.2f} F{p.feed_draw}")
-        out.append(f"G0 Z{p.z_up:.2f} F{p.feed_z}")
+        out.append(f"G0 Z{p.travel_z:.2f} F{p.feed_z}")
     out += p.end.format(**asdict(p)).splitlines()
     return "\n".join(out) + "\n"
