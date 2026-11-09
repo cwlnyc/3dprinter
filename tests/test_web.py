@@ -92,3 +92,26 @@ def test_deleting_a_sample_that_is_gone_is_harmless(client):
     client.post("/learn", data={"scans": pages}, content_type="multipart/form-data")
     r = client.post("/samples/delete", data={"ch": "a", "idx": "99"}, follow_redirects=True)
     assert b"already gone" in r.data
+
+
+def test_answers_solved_elsewhere_can_be_imported(client, tmp_path):
+    pages = [(png(photographed(filled_page(p))), f"p{p}.jpg") for p in range(template.page_count())]
+    client.post("/learn", data={"scans": pages}, content_type="multipart/form-data")
+    answers = [Answer("1", "12 x 7", "84", "write", (140.0, 40.0, 40.0, 10.0), "high", "line")]
+    path = tmp_path / "answers.json"
+    solve_mod.save(str(path), answers, "solved in chat")
+    r = client.post("/import", data={"homework": (png(filled_page(0)), "hw.jpg"),
+                                     "answers": (io.BytesIO(path.read_bytes()), "answers.json"), "paper": "letter"},
+                    content_type="multipart/form-data", follow_redirects=True)
+    assert b"Loaded 1 answer" in r.data
+    assert b"solved in chat" in r.data
+    assert client.get("/out/answers.gcode").status_code == 200
+
+
+def test_a_broken_answers_file_is_refused(client):
+    pages = [(png(photographed(filled_page(0))), "p0.jpg")]
+    client.post("/learn", data={"scans": pages}, content_type="multipart/form-data")
+    r = client.post("/import", data={"homework": (png(filled_page(0)), "hw.jpg"),
+                                     "answers": (io.BytesIO(b'{"nope": 1}'), "answers.json")},
+                    content_type="multipart/form-data", follow_redirects=True)
+    assert b"Couldn" in r.data

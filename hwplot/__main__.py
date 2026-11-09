@@ -6,6 +6,7 @@
   render    answers.json + hand.json -> preview PNG, SVG and G-code
   run       solve + render in one go
   serve     the same steps as a web page on http://localhost:8000
+  blanks    flatten a homework photo and list its answer lines and boxes, numbered
 """
 from __future__ import annotations
 
@@ -97,6 +98,26 @@ def cmd_run(a):
     return cmd_render(a, flat)
 
 
+def cmd_blanks(a):
+    """For solving a sheet by hand (or in a chat): where are the blanks, exactly?"""
+    os.makedirs(a.out_dir, exist_ok=True)
+    flat = _flatten(a.homework, a.out_dir, a.paper)
+    found = blanks.find_blanks(flat)
+    marked = flat.copy()
+    for i, b in enumerate(found, 1):
+        x, y, w, h = (round(v * page.PX_PER_MM) for v in (b.x, b.y, b.w, b.h))
+        colour = (40, 140, 40) if b.kind == "line" else (200, 90, 20)
+        if b.kind == "line":
+            cv2.line(marked, (x, y), (x + w, y), colour, 3)
+        else:
+            cv2.rectangle(marked, (x, y), (x + w, y + h), colour, 3)
+        cv2.putText(marked, str(i), (x, max(12, y - 4)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, colour, 2)
+        print(f"{i:>3}  {b.kind:<4}  x={b.x:6.1f}  y={b.y:6.1f}  w={b.w:6.1f}  h={b.h:5.1f}  (mm)")
+    path = os.path.join(a.out_dir, "blanks.png")
+    cv2.imwrite(path, marked)
+    print(f"{len(found)} blank(s); page.png and {path} written")
+
+
 def cmd_serve(a):
     from .web import serve
     serve(a.port, a.workspace, open_browser=not a.no_browser)
@@ -135,6 +156,12 @@ def main(argv=None):
     s = sub.add_parser("solve"); common(s); s.set_defaults(fn=cmd_solve)
     r = sub.add_parser("render"); common(r, homework=False); render_opts(r); r.set_defaults(fn=cmd_render)
     u = sub.add_parser("run"); common(u); render_opts(u); u.set_defaults(fn=cmd_run)
+
+    b = sub.add_parser("blanks")
+    b.add_argument("homework")
+    b.add_argument("--out-dir", default="out")
+    b.add_argument("--paper", choices=["letter", "a4"], default="letter")
+    b.set_defaults(fn=cmd_blanks)
 
     v = sub.add_parser("serve")
     v.add_argument("--port", type=int, default=8000)

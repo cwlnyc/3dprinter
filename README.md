@@ -88,6 +88,15 @@ run `render` again. No new API call is needed. `--size 4` writes smaller,
 `--seed 3` gives a different random mix of your letter variants, and
 multiple-choice answers are circled instead of written.
 
+### Solving a sheet in a Claude chat instead
+
+If you'd rather not use an API key, send the homework photo to Claude in a chat.
+Claude runs `python3 -m hwplot blanks photo.jpg` to flatten the page and number
+its answer lines and boxes, solves the questions, and sends back an
+`answers.json`. On the web page, open step 4's **"Already have the answers?"**
+and upload the **same photo** with that file. Positions only line up with the
+photo that was solved, so retaking the photo means solving it again.
+
 ## 3. The printer
 
 ### Print the pen holder

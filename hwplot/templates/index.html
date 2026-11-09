@@ -146,6 +146,18 @@
       <div class="row"><button {{ 'disabled' if not hand }}>Solve it</button>{% if not hand %}<span class="lead">Do step 1 first.</span>{% endif %}</div>
     </form>
   </div>
+  <details style="margin-top:1rem">
+    <summary><strong>Already have the answers?</strong> Upload them with the photo instead</summary>
+    <p class="lead">If the sheet was solved somewhere else, such as in a Claude chat, upload <strong>the exact same photo</strong> that was solved, plus its <code>answers.json</code>. The answer positions only line up with that photo, so a retaken photo won't match.</p>
+    <form method="post" action="/import" enctype="multipart/form-data" data-busy="Drawing the answers…">
+      <div class="grid">
+        <div><label>The homework photo that was solved</label><input type="file" name="homework" accept="image/*" required></div>
+        <div><label>answers.json</label><input type="file" name="answers" accept=".json,application/json" required></div>
+        <div><label>Paper size</label><select name="paper"><option value="letter" {{ 'selected' if paper=='letter' }}>US Letter</option><option value="a4" {{ 'selected' if paper=='a4' }}>A4</option></select></div>
+      </div>
+      <div class="row"><button {{ 'disabled' if not hand }}>Write these answers</button></div>
+    </form>
+  </details>
 </section>
 
 <section class="step" id="step5">

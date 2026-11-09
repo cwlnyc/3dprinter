@@ -238,6 +238,30 @@ def create_app(workspace: str | os.PathLike = "workspace") -> Flask:
         return send_file(io.BytesIO(test_pattern(load_printer()).encode()), as_attachment=True,
                          download_name="test-pattern.gcode", mimetype="text/plain")
 
+    @app.post("/import")
+    def do_import():
+        """Answers worked out elsewhere (e.g. in a Claude chat) for this exact photo."""
+        state["paper"] = request.form.get("paper", "letter")
+        photo, answers_file = request.files.get("homework"), request.files.get("answers")
+        if load_hand() is None:
+            flash("Do step 1 first: I need your handwriting before I can write answers.", "error")
+        elif not photo or not photo.filename or not answers_file or not answers_file.filename:
+            flash("Choose both the homework photo and its answers.json.", "error")
+        else:
+            try:
+                flat = page.flatten(read_upload(photo), page_mm())
+                cv2.imwrite(str(out / "page.png"), flat)
+                answers_path.write_bytes(answers_file.read())
+                answers, _ = solve.load(str(answers_path))  # validates the file
+                for m in rerender(fit=True, size=5.0, seed=0):
+                    flash(m, "warn")
+                flash(f"Loaded {len(answers)} answer(s). Check every one before printing.", "ok")
+                return redirect(url_for("results"))
+            except (ValueError, KeyError, TypeError) as e:
+                answers_path.unlink(missing_ok=True)
+                flash(f"Couldn't use that answers file: {e}", "error")
+        return redirect(url_for("index") + "#step4")
+
     @app.post("/solve")
     def do_solve():
         if request.form.get("api_key"):
