@@ -130,7 +130,8 @@ def create_server(workspace: str | os.PathLike = "workspace", photos: str | os.P
             raise ValueError("No sheet loaded: call get_sheet first.")
         return state["sheet"]
 
-    server = MCPServer("hwplot", instructions=INSTRUCTIONS)
+    server = MCPServer("hwplot", title="Homework Plotter", version="1.0.0", instructions=INSTRUCTIONS,
+                       log_level="WARNING")
 
     @server.tool()
     def get_sheet(filename: str = "") -> list:
@@ -394,6 +395,12 @@ def run(workspace: str = "workspace", photos: str = "", port: int = 8765, serial
     app = server.streamable_http_app(
         streamable_http_path=f"/{key}/mcp",
         transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+        # Plain JSON replies and no sessions: every request stands alone. Nothing
+        # here needs to push messages to Claude, and a long-lived stream tied to a
+        # session ID is the fragile part when two proxies sit in between (and a
+        # session would be lost at every restart of the connector anyway).
+        json_response=True,
+        stateless_http=True,
     )
 
     app = _logged(app, key)
