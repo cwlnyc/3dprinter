@@ -28,7 +28,7 @@ def test_whole_flow(client, monkeypatch):
     assert client.get("/template.pdf").data[:4] == b"%PDF"
     assert len(client.get("/hardware/pen_holder_8mm.stl").data) > 1000
 
-    pages = [(png(photographed(filled_page(p))), f"p{p}.jpg") for p in range(template.page_count())]
+    pages = [(png(photographed(filled_page(p))), f"p{p}.jpg") for p in range(template.core_page_count())]
     r = client.post("/learn", data={"scans": pages}, content_type="multipart/form-data", follow_redirects=True)
     assert b"88 characters" in r.data and b"Added" in r.data
     assert client.get("/specimen.png").data[:4] == b"\x89PNG"
@@ -95,7 +95,7 @@ def test_deleting_a_sample_that_is_gone_is_harmless(client):
 
 
 def test_answers_solved_elsewhere_can_be_imported(client, tmp_path):
-    pages = [(png(photographed(filled_page(p))), f"p{p}.jpg") for p in range(template.page_count())]
+    pages = [(png(photographed(filled_page(p))), f"p{p}.jpg") for p in range(template.core_page_count())]
     client.post("/learn", data={"scans": pages}, content_type="multipart/form-data")
     answers = [Answer("1", "12 x 7", "84", "write", (140.0, 40.0, 40.0, 10.0), "high", "line")]
     path = tmp_path / "answers.json"
@@ -118,7 +118,7 @@ def test_a_broken_answers_file_is_refused(client):
 
 
 def test_a_dropped_folder_is_imported(client, tmp_path):
-    pages = [(png(photographed(filled_page(p))), f"p{p}.jpg") for p in range(template.page_count())]
+    pages = [(png(photographed(filled_page(p))), f"p{p}.jpg") for p in range(template.core_page_count())]
     client.post("/learn", data={"scans": pages}, content_type="multipart/form-data")
     path = tmp_path / "answers.json"
     solve_mod.save(str(path), [Answer("1", "q", "A", "write", (140.0, 40.0, 6.0, 4.4), "high", "line")], "")
@@ -149,7 +149,7 @@ def _zip(entries):
 
 
 def test_a_zip_of_several_sheets_lists_them_to_write_one_at_a_time(client, tmp_path):
-    pages = [(png(photographed(filled_page(p))), f"p{p}.jpg") for p in range(template.page_count())]
+    pages = [(png(photographed(filled_page(p))), f"p{p}.jpg") for p in range(template.core_page_count())]
     client.post("/learn", data={"scans": pages}, content_type="multipart/form-data")
     path = tmp_path / "answers.json"
     solve_mod.save(str(path), [Answer("1", "q", "A", "write", (140.0, 40.0, 6.0, 4.4), "high", "line")], "")
@@ -168,7 +168,7 @@ def test_a_zip_of_several_sheets_lists_them_to_write_one_at_a_time(client, tmp_p
 
 
 def test_a_zip_of_one_sheet_goes_straight_through(client, tmp_path):
-    pages = [(png(photographed(filled_page(p))), f"p{p}.jpg") for p in range(template.page_count())]
+    pages = [(png(photographed(filled_page(p))), f"p{p}.jpg") for p in range(template.core_page_count())]
     client.post("/learn", data={"scans": pages}, content_type="multipart/form-data")
     path = tmp_path / "answers.json"
     solve_mod.save(str(path), [Answer("1", "q", "A", "write", (140.0, 40.0, 6.0, 4.4), "high", "line")], "")
@@ -191,7 +191,7 @@ def test_paper_placement_is_described_in_words():
 
 
 def test_with_the_jig_the_page_says_slide_it_in_and_the_print_has_no_stops(client, tmp_path):
-    pages = [(png(photographed(filled_page(p))), f"p{p}.jpg") for p in range(template.page_count())]
+    pages = [(png(photographed(filled_page(p))), f"p{p}.jpg") for p in range(template.core_page_count())]
     client.post("/learn", data={"scans": pages}, content_type="multipart/form-data")
     from hwplot.gcode import Printer
     ws = tmp_path  # the client fixture's workspace is tmp_path

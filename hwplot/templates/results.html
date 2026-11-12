@@ -14,6 +14,10 @@
         <a class="btn secondary" href="/out/preview.png?download=1">Preview PNG</a>
         <a class="btn secondary" href="/out/answers.json?download=1">answers.json</a>
       </div>
+      {% if steps %}
+      <div class="note"><strong>This sheet takes {{ steps|length }} passes</strong>, because some answers are out of the pen's reach with the sheet in one place. It's still one print: the printer parks between passes and its screen says how to turn the sheet.
+        <ol>{% for st in steps %}<li>{{ st }}</li>{% endfor %}</ol></div>
+      {% endif %}
       {% if placement %}
       <h3>Printing</h3>
       <ol>

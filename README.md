@@ -82,6 +82,22 @@ So no two copies of a word are identical. `learn` adds to the samples you
 already have (use `--fresh` to start over), so filling in more sheets over time
 gives a wider range. Scanning the same page twice adds nothing.
 
+Characters you never wrote are built in your style: accents (á ñ ü ¿ ¡)
+from your own letters plus the mark, superscripts (² ³) from your digits made
+small and raised, and maths symbols (× ÷ ± ≤ ≥ ≠ ≈) from your own pieces. Others
+(√ π ∞ θ ° and arrows) are drawn from plain shapes, then given your measured
+slant, size and wobble. The template's optional page 3 has the common ones: fill
+it in and your real versions are used instead.
+
+Answers can also be drawings (`kind: "draw"`): lines, arrows, boxes, polygons,
+circles, and curves through points for graphs. They come out the way a hand
+draws them: lines bow and wander a little and run slightly past their ends,
+corners overshoot, and circles are a touch oval and overlap where they close.
+
+When answers spread wider than the pen can reach with the sheet in one place,
+the job is split into passes. It's still one print: between passes the printer
+parks and its screen says how to turn the sheet, then it stops to line it up.
+
 If an answer is wrong or sits in the wrong spot, edit `out/answers.json` (each
 `box` is `[x, y, width, height]` in mm from the page's top-left corner) and
 run `render` again. No new API call is needed. `--size 4` writes smaller,

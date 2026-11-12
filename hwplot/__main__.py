@@ -20,7 +20,8 @@ import sys
 import cv2
 
 from . import blanks, page, render, solve, template
-from .gcode import OutOfReach, Printer, fit_paper, generate
+from .gcode import OutOfReach, Printer, generate
+from .job import build
 from .glyphs import Hand, learn
 
 
@@ -74,27 +75,26 @@ def cmd_render(a, flat=None):
     missing = set().union(*(hand.missing(x.answer) for x in answers if x.kind == "write"))
     if missing:
         print("warning: no handwriting sample for", " ".join(sorted(missing)), "- those characters are skipped")
-    strokes = render.render_answers(answers, hand, flat, seed=a.seed, cap_mm=a.size)
     page_mm = page.A4_MM if a.paper == "a4" else page.LETTER_MM
-
-    cv2.imwrite(os.path.join(a.out_dir, "preview.png"), render.overlay(flat, strokes))
-    with open(os.path.join(a.out_dir, "answers.svg"), "w") as f:
-        f.write(render.svg(strokes, page_mm))
-
     printer = Printer.load(a.printer) if a.printer and os.path.exists(a.printer) else Printer()
-    if a.fit:
-        printer = fit_paper(strokes, printer, page_w=page_mm[0])
     try:
-        code = generate(strokes, printer, marks=render.alignment_marks(answers))
+        if a.fit or printer.jig:
+            job = build(answers, hand, flat, printer, page_w=page_mm[0], seed=a.seed, cap_mm=a.size)
+            strokes, code, steps = job.strokes, job.gcode, job.steps(answers)
+        else:
+            strokes = render.render_answers(answers, hand, flat, seed=a.seed, cap_mm=a.size)
+            code, steps = generate(strokes, printer, marks=render.alignment_marks(answers)), []
     except OutOfReach as e:
         print("G-code not written:", e)
         return 1
+    cv2.imwrite(os.path.join(a.out_dir, "preview.png"), render.overlay(flat, strokes))
+    with open(os.path.join(a.out_dir, "answers.svg"), "w") as f:
+        f.write(render.svg(strokes, page_mm))
     with open(os.path.join(a.out_dir, "answers.gcode"), "w") as f:
         f.write(code)
     print(f"wrote preview.png, answers.svg, answers.gcode in {a.out_dir}")
-    turn = "TURNED ROUND, top edge to the front" if printer.paper_flipped else "top edge to the back"
-    from .web import describe_corner
-    print(f"place the paper {turn}. " + describe_corner(printer.paper_x, printer.paper_y, printer.paper_flipped, printer.bed_x, printer.bed_y))
+    for st in steps:
+        print(st)
     return 0
 
 

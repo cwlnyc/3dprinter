@@ -25,7 +25,8 @@ import numpy as np
 from pydantic import BaseModel, Field
 
 from . import blanks, page, render
-from .gcode import OutOfReach, Printer, generate, jig_reach, jig_test, place
+from .gcode import OutOfReach, Printer, jig_reach, jig_test
+from .job import build
 from .gcode import jig_calibrate as calibrate
 from .glyphs import Hand
 from .solve import Answer
@@ -41,13 +42,30 @@ only once they have seen it -> printer_status to follow it.
 
 Answers must be correct and short, as a student would write them. Use zoom when
 text is small. For multiple choice, circle the option (kind="circle", blank=None,
-box around the printed option). Use only characters the user's handwriting has."""
+box around the printed option). Accents and maths symbols are fine. For graphs,
+diagrams and figures use kind="draw" with shapes (lines, arrows, curves through
+points, circles...): they come out hand-drawn. Answers out of the pen's reach are
+split into passes automatically; tell the user the steps preview_answers lists."""
+
+
+class ShapeIn(BaseModel):
+    type: str = Field(description="line, arrow, polyline, polygon, rect, curve (smooth, through the points: "
+                                  "for graphs), circle, ellipse or dot")
+    points: list[list[float]] = Field(description="[[x, y], ...] in mm on the page. line/arrow/rect: two points; "
+                                                  "circle/ellipse: the centre")
+    r: float | None = Field(None, description="circle radius, mm")
+    rx: float | None = Field(None, description="ellipse half-width, mm")
+    ry: float | None = Field(None, description="ellipse half-height, mm")
+    closed: bool = False
 
 
 class AnswerIn(BaseModel):
-    text: str = Field(description="Exactly what to write, e.g. 'G' or 'x = 5'")
+    text: str = Field("", description="Exactly what to write, e.g. 'G' or 'x = 5'. Accents and maths symbols "
+                                      "(á ñ ¿ × ÷ ≤ √ π ² →) are fine: any the user never wrote are built in their style")
     blank: int | None = Field(None, description="Number from find_blanks to write on; omit to give a box instead")
-    kind: str = Field("write", description="'write', or 'circle' to circle a printed option")
+    kind: str = Field("write", description="'write'; 'circle' to circle a printed option; or 'draw' to draw "
+                                            "shapes (lines, arrows, graphs, figures) by hand, given in shapes")
+    shapes: list[ShapeIn] = Field(default_factory=list, description="For kind 'draw'")
     x: float | None = Field(None, description="Box left, mm from the page's left edge (when not using a blank)")
     y: float | None = Field(None, description="Box top, mm from the page's top edge")
     w: float | None = Field(None, description="Box width, mm")
@@ -83,6 +101,16 @@ def answers_from(items: list[AnswerIn], sheet: Sheet) -> tuple[list[Answer], lis
     out, problems = [], []
     for i, a in enumerate(items, 1):
         name = a.label or str(a.blank or i)
+        if a.kind == "draw":
+            from .sketch import KINDS, bounds
+            shapes = [sh.model_dump(exclude_none=True) for sh in a.shapes]
+            bad = [sh["type"] for sh in shapes if sh["type"] not in KINDS]
+            if bad or not shapes:
+                problems.append(f"{name}: " + (f"unknown shape type {bad[0]!r}" if bad else "no shapes given"))
+                continue
+            x0, y0, x1, y1 = bounds(shapes)
+            out.append(Answer(name, "", a.text, "draw", (x0, y0, x1 - x0, y1 - y0), "high", "none", shapes))
+            continue
         if a.blank is not None:
             if not 1 <= a.blank <= len(found):
                 problems.append(f"{name}: there is no blank {a.blank} (find_blanks found {len(found)})")
@@ -221,33 +249,28 @@ def create_server(workspace: str | os.PathLike = "workspace", photos: str | os.P
         items, problems = answers_from(answers, s)
         h = hand()
         missing = set().union(set(), *(h.missing(a.answer) for a in items if a.kind == "write"))
-        strokes = render.render_answers(items, h, s.flat, cap_mm=letter_height_mm)
-        preview = render.overlay(s.flat, strokes)
-        cv2.imwrite(str(out / "preview.png"), preview)
-        p, align = place(strokes, printer())
         notes = list(problems)
         if missing:
-            notes.append("No handwriting sample for " + " ".join(sorted(missing)) + ": those characters are left out.")
+            notes.append("Can't write " + " ".join(sorted(missing)) + ": no sample and no way to build one. "
+                         "Those characters are left out.")
+        p = printer()
         try:
-            gcode = generate(strokes, p, align=align, marks=render.alignment_marks(items))
+            job = build(items, h, s.flat, p, cap_mm=letter_height_mm)
         except OutOfReach as e:
             state["job"] = None
-            if p.jig:
-                (xa, xb), (ya, yb) = jig_reach(p)
-                notes.append(f"Out of reach in the jig: the pen can only write between {xa:.0f} and {xb:.0f} mm "
-                             f"from the left edge and {ya:.0f} to {yb:.0f} mm from the top. ({e})")
-            else:
-                notes.append(str(e))
-            return ["NOT ready to print.\n" + "\n".join(notes), Image(data=_jpeg(preview), format="jpeg")]
-        (out / "answers.gcode").write_text(gcode)
-        state["job"] = gcode
-        where = ("Sheet goes in the jig." if p.jig else
-                 f"No jig: the sheet goes {'turned round (title to the front)' if p.paper_flipped else 'title to the back'}, "
-                 "and the printer will stop to line it up.")
+            strokes = render.render_answers(items, h, s.flat, cap_mm=letter_height_mm)
+            notes.append(f"Out of reach: {e}. Make that answer or drawing smaller.")
+            return ["NOT ready to print.\n" + "\n".join(notes),
+                    Image(data=_jpeg(render.overlay(s.flat, strokes)), format="jpeg")]
+        preview = render.overlay(s.flat, job.strokes)
+        cv2.imwrite(str(out / "preview.png"), preview)
+        (out / "answers.gcode").write_text(job.gcode)
+        state["job"] = job.gcode
         port = find_port(sender.port)
         how = f"Printer found on USB ({port})." if port else \
               f"No printer on USB: start_print will save the file for the SD card instead ({out / 'answers.gcode'})."
-        return [f"Ready: {len(items)} answers. {where} {how}" + ("\n" + "\n".join(notes) if notes else ""),
+        head = f"Ready: {len(items)} answers in {len(job.passes)} pass{'es' if len(job.passes) > 1 else ''}."
+        return [head + "\n" + "\n".join(job.steps(items)) + "\n" + how + ("\n" + "\n".join(notes) if notes else ""),
                 Image(data=_jpeg(preview), format="jpeg")]
 
     @server.tool()

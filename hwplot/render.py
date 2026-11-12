@@ -37,7 +37,7 @@ def find_writing_line(flat: np.ndarray, box) -> float | None:
 
 def _layout_lines(text: str, hand: Hand, scale: float, space: float, gap: float, max_w: float) -> list[list[str]]:
     def word_w(word):
-        return sum(max((g.width for g in hand.variants(c)), default=0) * scale + gap for c in word)
+        return sum(hand.width_of(c) * scale + gap for c in word)
 
     lines, cur, cur_w = [], [], 0.0
     for para in text.split("\n"):
@@ -62,7 +62,7 @@ def write(text: str, box, hand: Hand, rng: random.Random, cap_mm: float = 5.0, b
         space, gap, line_h = cap * hand.style.word_space, cap * hand.style.letter_gap, cap * 1.6
         lines = _layout_lines(text, hand, scale, space, gap, w)
         widest = max(
-            (sum(max((g.width for g in hand.variants(c)), default=0) * scale + gap for c in " ".join(l)) for l in lines),
+            (sum(hand.width_of(c) * scale + gap for c in " ".join(l)) for l in lines),
             default=0,
         )
         if (len(lines) * line_h <= h + cap * 0.3 and widest <= w) or cap <= MIN_CAP_MM:
@@ -109,7 +109,11 @@ def render_answers(answers: list[Answer], hand: Hand, flat: np.ndarray | None = 
     rng = random.Random(seed)
     strokes: list[Polyline] = []
     for a in answers:
-        if a.kind == "circle":
+        if a.kind == "draw":
+            from .sketch import draw
+            for shape in a.shapes or []:
+                strokes += draw(shape, rng)
+        elif a.kind == "circle":
             strokes += circle(a.box, rng)
         else:
             if a.target == "line":

@@ -7,6 +7,7 @@ spend your API key, so it should not be reachable from the rest of the network.
 from __future__ import annotations
 
 import io
+import json
 import os
 import re
 import shutil
@@ -23,7 +24,8 @@ import numpy as np
 from flask import Flask, abort, flash, redirect, render_template, request, send_file, url_for
 
 from . import blanks, page, render, solve, template
-from .gcode import OutOfReach, Printer, fit_paper, generate, place, test_pattern
+from .gcode import OutOfReach, Printer, generate, test_pattern
+from .job import build
 from .glyphs import Hand, learn
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -162,20 +164,30 @@ def create_app(workspace: str | os.PathLike = "workspace") -> Flask:
         answers, _ = solve.load(str(answers_path))
         missing = set().union(set(), *(hand.missing(a.answer) for a in answers if a.kind == "write"))
         if missing:
-            msgs.append("No handwriting sample for " + " ".join(sorted(missing)) + " - those characters are left out.")
-        strokes = render.render_answers(answers, hand, flat, seed=seed, cap_mm=size)
-        cv2.imwrite(str(out / "preview.png"), render.overlay(flat, strokes))
-        (out / "answers.svg").write_text(render.svg(strokes, page_mm()))
-        p, align = load_printer(), True
-        if fit or p.jig:  # with the jig the sheet's spot is fixed, so there's nothing to fit
-            p, align = place(strokes, p, page_w=page_mm()[0])
+            msgs.append("Can't write " + " ".join(sorted(missing)) + ": no sample and no way to build one, so they're left out.")
+        p, steps = load_printer(), []
         try:
-            (out / "answers.gcode").write_text(generate(strokes, p, align=align, marks=render.alignment_marks(answers)))
-            how = "jig" if p.jig else ("flipped" if p.paper_flipped else "upright")
-            (out / "placement.txt").write_text(f"{p.paper_x} {p.paper_y} {how}")
+            if fit or p.jig:  # place it (in passes if need be); with the jig the first spot is fixed
+                job = build(answers, hand, flat, p, page_w=page_mm()[0], seed=seed, cap_mm=size)
+                strokes, gcode, first = job.strokes, job.gcode, job.passes[0]
+                p, align = first.printer, first.align
+                steps = job.steps(answers) if len(job.passes) > 1 else []
+            else:  # where printer.json says, as set by hand
+                strokes = render.render_answers(answers, hand, flat, seed=seed, cap_mm=size)
+                align = True
+                gcode = generate(strokes, p, marks=render.alignment_marks(answers))
         except OutOfReach as e:
+            strokes = render.render_answers(answers, hand, flat, seed=seed, cap_mm=size)
+            gcode = None
             (out / "answers.gcode").unlink(missing_ok=True)
             msgs.append(f"G-code not made: {e}")
+        cv2.imwrite(str(out / "preview.png"), render.overlay(flat, strokes))
+        (out / "answers.svg").write_text(render.svg(strokes, page_mm()))
+        (out / "steps.json").write_text(json.dumps(steps))
+        if gcode:
+            (out / "answers.gcode").write_text(gcode)
+            how = "jig" if not align else ("flipped" if p.paper_flipped else "upright")
+            (out / "placement.txt").write_text(f"{p.paper_x} {p.paper_y} {how}")
         return msgs
 
     @app.get("/")
@@ -428,7 +440,8 @@ def create_app(workspace: str | os.PathLike = "workspace") -> Flask:
             pr = load_printer()
             where = describe_corner(float(placement[0]), float(placement[1]),
                                     len(placement) > 2 and placement[2] in ("flipped", "jig"), pr.bed_x, pr.bed_y)
-        return render_template("results.html", answers=answers, notes=notes, placement=placement, where=where,
+        steps = json.loads((out / "steps.json").read_text()) if (out / "steps.json").exists() else []
+        return render_template("results.html", answers=answers, notes=notes, placement=placement, where=where, steps=steps,
                                has_gcode=(out / "answers.gcode").exists(), v=int((out / "preview.png").stat().st_mtime))
 
     @app.post("/results")

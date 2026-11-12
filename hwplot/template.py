@@ -25,6 +25,12 @@ CHARSET = (
     ".,?!:;'\"()-+=/*%$<>^_#&@[]"
 )
 COPIES = 2  # every character twice, so a page of answers is not a page of clones
+# An optional extra page: accents for Spanish and French, and maths symbols.
+# Anything here that isn't filled in is built from the core letters instead
+# (see synth.py), so this page only makes them look more like the writer's own.
+# It comes after the core pages and never moves them, so sheets already filled
+# in still read correctly.
+EXTRA_CHARSET = "áéíóúñüÁÉÍÓÚÑ¿¡°²³×÷±≤≥≠≈√π∞θ→←"
 
 MARKER_MM = 14.0
 MARGIN_MM = 10.0
@@ -47,15 +53,27 @@ class Cell:
     y: float
 
 
-def cells() -> list[Cell]:
-    chars = [c for _ in range(COPIES) for c in CHARSET]
+def _layout(chars: list[str], first_page: int) -> list[Cell]:
     per_page = COLS * ROWS
     out = []
     for i, ch in enumerate(chars):
         page, k = divmod(i, per_page)
         r, c = divmod(k, COLS)
-        out.append(Cell(ch, page, GRID_LEFT + c * CELL_W, GRID_TOP + r * CELL_H))
+        out.append(Cell(ch, first_page + page, GRID_LEFT + c * CELL_W, GRID_TOP + r * CELL_H))
     return out
+
+
+def core_cells() -> list[Cell]:
+    return _layout([c for _ in range(COPIES) for c in CHARSET], 0)
+
+
+def core_page_count() -> int:
+    return max(c.page for c in core_cells()) + 1
+
+
+def cells() -> list[Cell]:
+    """Every box on every page: the core letters, then the optional symbols page."""
+    return core_cells() + _layout([c for _ in range(COPIES) for c in EXTRA_CHARSET], core_page_count())
 
 
 def page_count() -> int:
@@ -87,8 +105,11 @@ def render_page(page: int, dpi: int = 300, page_mm=LETTER_MM) -> Image.Image:
 
     d.text(
         (round((MARGIN_MM + MARKER_MM + 4) * px), round(MARGIN_MM * px)),
-        f"Handwriting sample - page {page + 1} of {page_count()}.  One character per box, "
-        "sitting on the tick marks.\nUse the pen you will put in the printer. Keep it inside the box.",
+        (f"Handwriting sample - page {page + 1} of {page_count()}.  One character per box, "
+         "sitting on the tick marks.\nUse the pen you will put in the printer. Keep it inside the box."
+         if page < core_page_count() else
+         f"Page {page + 1} of {page_count()}, optional: accents and maths symbols. One per box,\n"
+         "on the tick marks, with the printer's pen. Anything skipped is built from your letters."),
         fill=0,
         font=small,
     )

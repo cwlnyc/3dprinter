@@ -70,7 +70,7 @@ def images_in(result):
 def workspace(tmp_path):
     ws = tmp_path / "ws"
     (ws / "photos").mkdir(parents=True)
-    hand, _, _ = learn([photographed(filled_page(p)) for p in range(template.page_count())])
+    hand, _, _ = learn([photographed(filled_page(p)) for p in range(template.core_page_count())])
     hand.save(str(ws / "hand.json"))
     Printer(pen_offset_x=77.9, pen_offset_y=-12.2, z_down=1.7, z_up=4.7, jig=True).save(str(ws / "printer.json"))
     cv2.imwrite(str(ws / "photos" / "hw.jpg"), photographed(blank_sheet()))
@@ -110,12 +110,34 @@ def test_a_sheet_goes_from_photo_to_printer(workspace, monkeypatch):
     assert "Done" in text_of(call(server, "printer_status"))
 
 
-def test_answers_out_of_the_jigs_reach_are_refused_not_printed(workspace):
+def test_answers_out_of_the_jigs_reach_get_a_second_pass(workspace):
     server = connector.create_server(workspace, sender=Sender(open_serial=lambda port: FakeMarlin()))
     call(server, "get_sheet")
-    r = call(server, "preview_answers", answers=[{"text": "x", "x": 190.0, "y": 20.0, "w": 15.0, "h": 8.0}])
-    assert text_of(r).startswith("NOT ready") and "Out of reach in the jig" in text_of(r)
-    assert "Nothing to print" in text_of(call(server, "start_print"))
+    call(server, "find_blanks")
+    r = call(server, "preview_answers", answers=[
+        {"text": "7", "x": 60.0, "y": 100.0, "w": 20.0, "h": 8.0, "label": "in reach"},
+        {"text": "x", "x": 190.0, "y": 20.0, "w": 15.0, "h": 8.0, "label": "top right"}])
+    t = text_of(r)
+    assert t.startswith("Ready: 2 answers in 2 passes"), t
+    assert "Pass 1: sheet in the jig. Writes in reach." in t
+    assert "Pass 2" in t and "top right" in t
+    gcode = (workspace / "out" / "answers.gcode").read_text()
+    assert "M0 Turn:" in gcode  # parks and says how to turn the sheet between passes
+
+
+def test_symbols_never_written_are_built_and_drawings_come_out(workspace):
+    server = connector.create_server(workspace, sender=Sender(open_serial=lambda port: FakeMarlin()))
+    call(server, "get_sheet")
+    r = call(server, "preview_answers", answers=[
+        {"text": "¿Qué año? 3² × 4 ≤ √π", "x": 60.0, "y": 100.0, "w": 80.0, "h": 10.0},
+        {"kind": "draw", "label": "graph", "shapes": [
+            {"type": "line", "points": [[40, 150], [120, 150]]},
+            {"type": "arrow", "points": [[40, 200], [40, 140]]},
+            {"type": "curve", "points": [[45, 195], [70, 175], [95, 160], [115, 152]]},
+            {"type": "circle", "points": [[80, 175]], "r": 4}]}])
+    t = text_of(r)
+    assert t.startswith("Ready"), t
+    assert "Can't write" not in t
 
 
 def test_without_usb_the_file_is_saved_for_the_sd_card(workspace, monkeypatch):

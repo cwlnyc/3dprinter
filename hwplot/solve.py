@@ -110,6 +110,8 @@ class Answer:
     # What the box was snapped to on the page: "line" (box bottom is the line),
     # "box", "option" (a multiple-choice label), or "none" (Claude's own box).
     target: str = "none"
+    # For kind "draw": hand-drawn lines, shapes and graphs (see sketch.py); answer may be empty.
+    shapes: list | None = None
 
 
 def _encode(img: np.ndarray) -> str:

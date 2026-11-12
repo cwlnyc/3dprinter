@@ -51,6 +51,7 @@ class Style:
     line_drift_deg: float = 0.8   # a line rises or falls by up to this much
     wobble: float = 0.025         # per-letter shape wobble
     blend: bool = True
+    slant_deg: float = 0.0        # measured from the writer's upright strokes; used for drawn symbols
 
 
 @dataclass
@@ -74,10 +75,14 @@ class Hand:
         return rng.choice(v) if v else None
 
     def make(self, ch: str, rng: random.Random) -> Glyph | None:
-        """A fresh instance of ch: a blend of two samples, slightly wobbled."""
+        """A fresh instance of ch: a blend of two samples, slightly wobbled.
+
+        A character never written is built in this hand's style instead (synth.py).
+        """
         v = self.variants(ch)
         if not v:
-            return None
+            from . import synth
+            return synth.make(ch, self, rng)
         g = rng.choice(v)
         if self.style.blend and len(v) > 1:
             a, b = rng.sample(v, 2)
@@ -99,9 +104,21 @@ class Hand:
 
         self.cap_height = tall("ABDEFHIKLMNPRTUVWXYZ0123456789") or self.cap_height
         self.x_height = tall("acemnorsuvwxz") or self.cap_height * 0.6
+        from . import synth
+        self.style.slant_deg = round(synth.measure_slant(self), 1)
 
     def missing(self, text: str) -> set[str]:
-        return {c for c in text if not c.isspace() and not self.variants(c)}
+        """Characters in text that can be neither found nor built."""
+        from . import synth
+        return {c for c in set(text) if not c.isspace() and not self.variants(c) and not synth.can_make(c, self)}
+
+    def width_of(self, ch: str) -> float:
+        """Widest this character comes out (mm at the hand's own size), for laying out lines."""
+        v = self.variants(ch)
+        if v:
+            return max(g.width for g in v)
+        g = self.make(ch, random.Random(0))
+        return g.width if g else 0.0
 
     def save(self, path: str) -> None:
         data = {
@@ -155,7 +172,7 @@ def learn(images: list[np.ndarray], hand: Hand | None = None) -> tuple[Hand, lis
             g = glyph_from_mask(template.box_mask(flat, cell))
             if g is not None and hand.add(cell.char, g, before.get(cell.char, [])):
                 added += 1
-    for p in range(template.page_count()):
+    for p in range(template.core_page_count()):  # the symbols page is optional
         if p not in seen_pages and not hand.glyphs:
             warnings.append(f"sample page {p + 1} was not scanned")
     blank = sorted(set(template.CHARSET) - set(hand.glyphs))
