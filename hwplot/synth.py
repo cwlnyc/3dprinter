@@ -197,7 +197,8 @@ def make(ch: str, hand, rng: random.Random):
             strokes += [[(x0, y1 - lift + 0.28 * cap), (x1, y1 - lift + 0.27 * cap)]]
         elif ch == "≠":
             cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-            strokes += [[(cx - 0.12 * cap, cy + 0.32 * cap), (cx + 0.12 * cap, cy - 0.32 * cap)]]
+            # long and steep, so it reads as a strike-through and not as part of a ≥
+            strokes += [[(cx - 0.16 * cap, cy + 0.5 * cap), (cx + 0.16 * cap, cy - 0.5 * cap)]]
         elif ch == "≈":
             strokes = [[(x, y - 0.1 * cap) for x, y in s] for s in strokes] + \
                       [[(x, y + 0.12 * cap) for x, y in s] for s in strokes]
