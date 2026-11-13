@@ -40,14 +40,20 @@ class Printer:
     feed_draw: int = 1500     # mm/min
     feed_travel: int = 6000
     feed_z: int = 900
-    start: str = "G28\nG90\nG21"
+    # M420 S1 turns the stored auto-level map back on: Marlin switches it off on
+    # G28 unless built otherwise, and without it the pen height drifts across
+    # the page. With no map stored it just reports that and carries on.
+    start: str = "G28\nM420 S1\nG90\nG21"
     pause: str = "M0"          # Klipper users: PAUSE
     end: str = "G0 Z15 F900\nG0 X0 Y{bed_y} F6000\nM84"
 
     @classmethod
     def load(cls, path: str) -> "Printer":
         with open(path) as f:
-            return cls(**json.load(f))
+            values = json.load(f)
+        if values.get("start") == OLD_START:  # saved before the levelling map was switched on
+            values["start"] = cls.start
+        return cls(**values)
 
     def save(self, path: str) -> None:
         with open(path, "w") as f:
@@ -71,6 +77,7 @@ class Printer:
         return max(self.z_up, self.z_down + TRAVEL_CLEARANCE)
 
 
+OLD_START = "G28\nG90\nG21"
 TRAVEL_CLEARANCE = 4.5  # mm above pen-down for moves between strokes
 
 
