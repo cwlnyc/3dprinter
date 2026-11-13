@@ -17,6 +17,8 @@ Shapes are dicts in page millimetres (origin top-left, y down):
   {"type": "circle",   "points": [[cx, cy]], "r": 5}
   {"type": "ellipse",  "points": [[cx, cy]], "rx": 8, "ry": 4}
   {"type": "dot",      "points": [[x, y], ...]}                  a small filled dot at each point
+  {"type": "ink",      "points": [[x, y], ...]}                  drawn exactly as given: pen strokes that
+                                                                  are already handwriting (from ml.py)
 """
 from __future__ import annotations
 
@@ -27,7 +29,7 @@ import numpy as np
 
 from .strokes import Polyline
 
-KINDS = ("line", "arrow", "polyline", "polygon", "rect", "curve", "circle", "ellipse", "dot")
+KINDS = ("line", "arrow", "polyline", "polygon", "rect", "curve", "circle", "ellipse", "dot", "ink")
 
 
 def _noise(n: int, rng: random.Random, amp: float) -> np.ndarray:
@@ -167,6 +169,8 @@ def draw(shape: dict, rng: random.Random) -> list[Polyline]:
         out = [_ellipse(pts[0], float(shape.get("rx", 4)), float(shape.get("ry", 2)), rng)]
     elif kind == "dot":
         out = [_dot(p, rng) for p in pts]
+    elif kind == "ink" and pts:
+        out = [np.asarray(pts, float)]
     return [[(float(x), float(y)) for x, y in s] for s in out if len(s)]
 
 

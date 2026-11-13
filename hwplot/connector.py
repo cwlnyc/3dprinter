@@ -205,6 +205,16 @@ def create_server(workspace: str | os.PathLike = "workspace", photos: str | os.P
         return f"Saved {name} ({len(raw) // 1024} KB). Call get_sheet to load it."
 
     @server.tool()
+    def get_handwriting() -> str:
+        """The user's learned handwriting (hand.json): every sample as pen strokes in mm, plus measured
+        style. For generating text in their style elsewhere (e.g. with a trained handwriting model);
+        send the result back as kind "draw" with "ink" shapes."""
+        path = ws / "hand.json"
+        if not path.exists():
+            return "No handwriting learned yet."
+        return path.read_text()
+
+    @server.tool()
     def zoom(x: float, y: float, w: float, h: float) -> list:
         """A sharper close-up of part of the sheet (mm on the page), for reading small text."""
         s = sheet()

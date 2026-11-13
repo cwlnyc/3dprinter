@@ -98,6 +98,19 @@ When answers spread wider than the pen can reach with the sheet in one place,
 the job is split into passes. It's still one print: between passes the printer
 parks and its screen says how to turn the sheet, then it stops to line it up.
 
+### The trained handwriting model (optional)
+
+`hwplot/ml.py` is a neural handwriting-synthesis network (Graves, 2013): trained
+on hundreds of writers' pen strokes, it writes new text as natural, joined,
+never-repeating pen movements. Shown a line of your own letters first
+("priming"), it continues in that style. It needs PyTorch and its weights,
+fetched by `./scripts/get-ml-model.sh` (15 MB, checksummed, from an MIT-licensed
+project; only the numbers are loaded, never that project's code). It's too heavy
+for a Pi 3, so it runs where Claude solves the sheet, and the result goes to the
+connector as `ink` shapes, drawn exactly as written. It knows English letters,
+digits and basic punctuation. Accents and maths symbols still come from the
+letter-by-letter route above.
+
 If an answer is wrong or sits in the wrong spot, edit `out/answers.json` (each
 `box` is `[x, y, width, height]` in mm from the page's top-left corner) and
 run `render` again. No new API call is needed. `--size 4` writes smaller,

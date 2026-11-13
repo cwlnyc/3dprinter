@@ -82,3 +82,9 @@ def test_a_curve_goes_through_its_points():
     (s,) = sketch.draw({"type": "curve", "points": pts}, random.Random(0))
     for px, py in pts:
         assert min(math.hypot(x - px, y - py) for x, y in s) < 0.6
+
+
+def test_ink_is_drawn_exactly_as_given():
+    pts = [[1.0, 2.0], [3.5, 2.5], [4.0, 6.0]]
+    (s,) = sketch.draw({"type": "ink", "points": pts}, random.Random(0))
+    assert [list(p) for p in s] == pts

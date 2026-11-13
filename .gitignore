@@ -7,3 +7,4 @@ __pycache__/
 workspace/
 relay/wrangler.toml
 relay/.wrangler/
+models/
