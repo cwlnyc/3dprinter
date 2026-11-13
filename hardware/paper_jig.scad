@@ -1,14 +1,16 @@
 // Paper jig for an Ender 3 / 3 Pro: puts every homework sheet in the same place.
 //
-// A thin tray that clips onto the front-right corner of the glass bed with the
-// binder clip that already holds the glass there. The sheet lies on the bed
+// A thin tray whose tongue lies on the front-right corner of the glass, held by
+// the binder clip at that corner, moved onto the glass's RIGHT edge so it grips
+// the end of the tongue from the side. (A clip on the front edge can't work:
+// its spine wraps round the front of the glass, exactly where the tray runs.) The sheet lies on the bed
 // turned round (title towards you). The overhanging top part rests on this
 // tray; the sheet's top edge butts against the tray's front lip and its left
 // edge (on your right, since it's turned round) against the side wall. Same
 // spot every time, so the printer needs no lining-up stops.
 //
-// The binder clip also holds the sheet: open it, slide the sheet's corner under
-// its jaw on top of the tongue, let go. No tape. The pen never reaches that
+// The binder clip also holds the sheet: its mouth faces into the bed, so open
+// it, slide the sheet's corner under its jaw on top of the tongue, let go. No tape. The pen never reaches that
 // strip of the page, so the clip can sit on it.
 //
 // Fit it once, push it snug against the glass, clamp it, and leave it there:
