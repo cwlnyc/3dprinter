@@ -12,7 +12,7 @@
 // One short piece of tape holds the sheet's corner to the tray; the pen never
 // reaches that strip of the page.
 //
-// Fit it once, push it snug against the glass, clamp it, and leave it there:
+// Fit it once, push it snug against the glass, tape it, and leave it there:
 // then run the jig calibration (two crosses, measured with a ruler) so the
 // software knows exactly where it sits.
 //
