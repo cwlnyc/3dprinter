@@ -156,7 +156,8 @@ def test_jig_calibration_moves_the_jig_and_turns_it_on(workspace):
     # Crosses landed 3 mm further from the left edge and 2 mm further from the top than intended.
     r = call(server, "jig_calibrate", cross1_from_left=43, cross1_from_top=82, cross2_from_left=123, cross2_from_top=192)
     p = Printer.load(str(workspace / "printer.json"))
-    assert p.jig and p.jig_x == 231.0 and p.jig_y == -47.0
+    d = Printer()
+    assert p.jig and p.jig_x == round(d.jig_x + 3, 1) and p.jig_y == round(d.jig_y - 2, 1)
     assert "Jig set" in text_of(r)
 
 

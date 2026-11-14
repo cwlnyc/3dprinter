@@ -23,7 +23,7 @@
       <ol>
         <li>Put the G-code on the printer's SD card (or send it with OctoPrint / Mainsail).</li>
         {% if placement|length > 2 and placement[2] == 'jig' %}
-        <li><strong>Slide the sheet into the jig:</strong> face up, turned round (title towards you). Its top edge against the jig's front lip, its left edge (on your right) against the side wall. Open the binder clip on the jig's corner and let it close on the sheet; that holds it, no tape needed.</li>
+        <li><strong>Slide the sheet into the jig:</strong> face up, turned round (title towards you). Its top edge against the jig's front lip, its left edge (on your right) against the side wall. Clip the sheet's top to the tray with the two binder clips, through the gaps in the lip; that holds it, no tape needed.</li>
         <li>Start the print. It homes and goes straight to writing: no stops.</li>
         {% else %}
         {% if placement|length > 2 and placement[2] == 'flipped' %}

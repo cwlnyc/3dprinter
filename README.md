@@ -270,16 +270,20 @@ picture it was sent instead of it being saved to a folder:
 
 ### The paper jig
 
-`hardware/stl/paper_jig.stl` is a tray that clips onto the front-right corner of
-the glass with the binder clip already there. The sheet goes turned round
-(title towards you): its top edge against the front lip, its left edge against
-the side wall, and the clip holds it. No tape and no lining up.
+`hardware/stl/paper_jig.stl` is a tray that hangs off the bed's front edge: two
+thin hooks rest on the front corners, outside the paper, and the tray's weight
+leans it back against the bed, so it needs no clamp or tape. Its top is level
+with the bed surface, so the sheet lies flat with no step. It works on the glass
+(in place of the two front clips) or on the bare bed. The sheet goes turned
+round (title towards you): its top edge against the front lip, its left edge
+against the side wall, and two binder clips through the gaps in the lip hold
+it. Print it turned 45 degrees in the slicer; it is longer than the bed is wide.
 
 Once it's fitted, ask Claude to run the jig setup (`jig_test_print`, then
 `jig_calibrate`). The printer draws two crosses, you measure where they landed
 with a ruler, and the software learns exactly where the jig sits. After that,
 every print skips the alignment stops. In the jig the pen reaches roughly 1–15
-cm from the page's left edge and 4.5–25 cm from its top. Answers outside that
+cm from the page's left edge and 6–27 cm from its top. Answers outside that
 are flagged rather than printed.
 
 ## Tests

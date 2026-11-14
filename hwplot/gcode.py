@@ -25,13 +25,13 @@ class Printer:
     paper_x: float = 0.0
     paper_y: float = 279.4
     paper_flipped: bool = False
-    # A paper jig (hardware/paper_jig.scad) clipped to the bed's front-right
-    # corner puts every sheet in the same place, turned round. With it on, that
+    # A paper jig (hardware/paper_jig.scad) hung on the bed's front edge puts
+    # every sheet in the same place, turned round, centred across the bed. With it on, that
     # fixed spot is used and no alignment stops are needed. jig_x / jig_y are
     # where the page's top-left corner lands, as measured by jig_calibrate.
     jig: bool = False
-    jig_x: float = 228.0
-    jig_y: float = -45.0
+    jig_x: float = 225.6
+    jig_y: float = -60.0
     # Pen tip minus nozzle position. Measure: draw a dot, compare to the nozzle.
     pen_offset_x: float = 0.0
     pen_offset_y: float = 0.0
