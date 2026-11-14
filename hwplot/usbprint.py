@@ -147,8 +147,9 @@ class Sender:
                 job.sent = n
                 n += 1
             if self._stop.is_set():
-                # Lift the pen clear and stop; the paper stays where it is.
-                for i, cmd in enumerate(("M410", "G91", "G0 Z10 F900", "G90"), start=n):
+                # Lift the pen clear and stop; the paper stays where it is. Heaters off too,
+                # in case it was a sliced part rather than a pen job.
+                for i, cmd in enumerate(("M410", "M104 S0", "M140 S0", "G91", "G0 Z10 F900", "G90"), start=n):
                     ser.write((framed(i, cmd) + "\n").encode())
                 job.state = "cancelled"
             else:

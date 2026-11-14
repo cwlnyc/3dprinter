@@ -60,4 +60,8 @@ def main(a) -> int:
     args = json.loads(a.args) if a.args else {}
     if a.photo:  # put_photo: send a local image file without pasting base64 on the command line
         args = {"filename": Path(a.photo).name, "data_base64": base64.b64encode(Path(a.photo).read_bytes()).decode()}
+    if a.file:  # print_file: send a local G-code file, gzipped (too big for a command-line argument)
+        import gzip
+        data = gzip.compress(Path(a.file).read_bytes())
+        args = {"filename": Path(a.file).name, "gcode_gzip_base64": base64.b64encode(data).decode()}
     return call(url, a.tool, args, a.out, a.token or os.environ.get("HWPLOT_TOKEN", ""))

@@ -203,6 +203,7 @@ def main(argv=None):
     rm.add_argument("--token", default="", help="bearer token, if the network doesn't add it (default: $HWPLOT_TOKEN)")
     rm.add_argument("--out", default="remote-out", help="folder for returned images")
     rm.add_argument("--photo", default="", help="with put_photo: the image file to send")
+    rm.add_argument("--file", default="", help="with print_file: the G-code file to send")
     rm.set_defaults(fn=cmd_remote)
 
     v = sub.add_parser("serve")

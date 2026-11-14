@@ -13,6 +13,7 @@ printed anywhere but the terminal that starts the server.
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 import secrets
@@ -292,6 +293,27 @@ def create_server(workspace: str | os.PathLike = "workspace", photos: str | os.P
             return (f"No printer on USB. The G-code is saved at {out / 'answers.gcode'}: "
                     "copy it to the SD card and print it from the printer's menu.")
         return sender.start(state["job"]) + " Use printer_status to follow it."
+
+    @server.tool()
+    def print_file(filename: str, gcode_gzip_base64: str) -> str:
+        """Print a ready-made G-code file, such as a part sliced for the printer (not answers).
+
+        The file goes gzipped and base64-encoded. It is saved on the Pi first, so
+        with no USB cable it can still go to the SD card from there.
+        """
+        import gzip
+        name = Path(filename).name or "file.gcode"
+        if not name.endswith(".gcode"):
+            name += ".gcode"
+        try:
+            gcode = gzip.decompress(base64.b64decode(gcode_gzip_base64)).decode()
+        except Exception as e:
+            return f"Couldn't read that file: {e}"
+        path = out / name
+        path.write_text(gcode)
+        if not find_port(sender.port):
+            return f"No printer on USB: saved {path} for the SD card."
+        return sender.start(gcode) + " Use printer_status to follow it."
 
     @server.tool()
     def printer_status() -> str:

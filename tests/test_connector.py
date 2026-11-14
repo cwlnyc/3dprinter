@@ -236,3 +236,15 @@ def test_the_handwriting_can_be_fetched(workspace):
     server = connector.create_server(workspace, sender=Sender(open_serial=lambda port: FakeMarlin()))
     data = json.loads(text_of(call(server, "get_handwriting")))
     assert "glyphs" in data and "a" in data["glyphs"]
+
+
+def test_print_file_saves_it_and_streams_it(workspace):
+    import base64, gzip
+    fake = FakeMarlin()
+    server = connector.create_server(workspace, sender=Sender(open_serial=lambda port: fake))
+    gcode = "G28\nM104 S200 ; heat\nG1 X10 Y10 E1\n"
+    data = base64.b64encode(gzip.compress(gcode.encode())).decode()
+    r = text_of(call(server, "print_file", filename="part.gcode", gcode_gzip_base64=data))
+    assert (workspace / "out" / "part.gcode").read_text() == gcode
+    assert "Started" in r or "No printer" in r
+    assert "Couldn't read" in text_of(call(server, "print_file", filename="x", gcode_gzip_base64="not gzip"))
