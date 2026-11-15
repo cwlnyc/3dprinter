@@ -53,8 +53,22 @@ def call(url: str, tool: str, args: dict, out_dir: str = "remote-out", token: st
     return 1 if status["error"] else 0
 
 
+def _saved_connector(workspace: str = "workspace") -> dict:
+    """The connector settings kept in the workspace, where the connector was set up here."""
+    path = Path(workspace) / "connector.json"
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
 def main(a) -> int:
     url = a.url or os.environ.get("HWPLOT_URL", "")
+    token = a.token or os.environ.get("HWPLOT_TOKEN", "")
+    saved = _saved_connector()
+    if not url and saved.get("relay_project"):  # on the machine that set the connector up
+        url = f"https://{saved['relay_project']}.pages.dev/mcp"
+        token = token or saved.get("secret", "")
     if not url:
         raise SystemExit("Give the connector address with --url or HWPLOT_URL (e.g. https://hwplot-xxxx.pages.dev/mcp)")
     args = json.loads(a.args) if a.args else {}
@@ -64,4 +78,4 @@ def main(a) -> int:
         import gzip
         data = gzip.compress(Path(a.file).read_bytes())
         args = {"filename": Path(a.file).name, "gcode_gzip_base64": base64.b64encode(data).decode()}
-    return call(url, a.tool, args, a.out, a.token or os.environ.get("HWPLOT_TOKEN", ""))
+    return call(url, a.tool, args, a.out, token)
