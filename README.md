@@ -270,20 +270,25 @@ picture it was sent instead of it being saved to a folder:
 
 ### The paper jig
 
-`hardware/stl/paper_jig.stl` is a tray that hangs off the bed's front edge: two
-thin hooks rest on the front corners, outside the paper, and the tray's weight
-leans it back against the bed, so it needs no clamp or tape. Its top is level
-with the bed surface, so the sheet lies flat with no step. It works on the glass
-(in place of the two front clips) or on the bare bed. The sheet goes turned
-round (title towards you): its top edge against the front lip, its left edge
-against the side wall, and two binder clips through the gaps in the lip hold
-it. Print it turned 45 degrees in the slicer; it is longer than the bed is wide.
+`hardware/stl/paper_jig.stl` is a tray that hangs off the front edge of the bare
+bed (no glass), level with it, so the sheet lies flat with no step. Two clips
+(`hardware/stl/paper_jig_clips.stl`, a left and a right) hold it there: each
+pinches the tray's back corner and the bed plate's front corner with a printed
+spring, against rigid faces that set where the jig sits. The left clip is flat
+and short on top, because the nozzle passes over that corner; the right one has
+the long arm and does most of the clamping. The clips are sized for a 3.2 mm
+(1/8 inch) bed plate: change `bed_t` in `hardware/paper_jig.scad` for another.
+
+The sheet goes turned round (title towards you): its top edge against the front
+lip, its left edge against the side wall, and two binder clips through the gaps
+in the lip hold it. Print the tray turned 45 degrees in the slicer; it is longer
+than the bed is wide. Take the jig off before 3D printing: slide it forward.
 
 Once it's fitted, ask Claude to run the jig setup (`jig_test_print`, then
 `jig_calibrate`). The printer draws two crosses, you measure where they landed
 with a ruler, and the software learns exactly where the jig sits. After that,
 every print skips the alignment stops. In the jig the pen reaches roughly 1–15
-cm from the page's left edge and 6–27 cm from its top. Answers outside that
+cm from the page's left edge and 6.5–27 cm from its top. Answers outside that
 are flagged rather than printed.
 
 ## Tests

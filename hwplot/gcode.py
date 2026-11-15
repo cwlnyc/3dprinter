@@ -31,7 +31,7 @@ class Printer:
     # where the page's top-left corner lands, as measured by jig_calibrate.
     jig: bool = False
     jig_x: float = 225.6
-    jig_y: float = -62.0
+    jig_y: float = -64.0
     # Pen tip minus nozzle position. Measure: draw a dot, compare to the nozzle.
     pen_offset_x: float = 0.0
     pen_offset_y: float = 0.0
@@ -78,6 +78,12 @@ class Printer:
 
 
 OLD_START = "G28\nG90\nG21"
+# The jig as built (hardware/paper_jig.scad): the sheet's top edge sits against
+# the lip 64 mm in front of the bed's front edge (60 mm of tray + the clips' 4 mm
+# spine), and its left edge against a 3 mm wall. The pen holder is about 18 mm
+# wide, so the pen stays 10.6 mm from that wall.
+JIG_PAGE_TOP_TO_BED = 64.0
+JIG_WALL_CLEARANCE = 10.6
 TRAVEL_CLEARANCE = 4.5  # mm above pen-down for moves between strokes
 
 
@@ -94,6 +100,12 @@ def pen_range(p: Printer) -> tuple[tuple[float, float], tuple[float, float]]:
     """
     x0, x1 = max(0.0, p.pen_offset_x), min(p.bed_x, p.bed_x + p.pen_offset_x)
     y0, y1 = max(0.0, p.pen_offset_y), min(p.bed_y, p.bed_y + p.pen_offset_y)
+    if p.jig:
+        # The jig's clips and side wall stand on the bed's front corners. Keep the
+        # pen holder clear of the wall and the right clip, and the pen behind the
+        # bed's real front edge: the nozzle then stays behind the left clip too.
+        x1 = min(x1, p.jig_x - JIG_WALL_CLEARANCE)
+        y0 = max(y0, p.jig_y + JIG_PAGE_TOP_TO_BED)
     return (x0, x1), (y0, y1)
 
 
@@ -347,7 +359,7 @@ def plan_passes(per_answer: list[list[Polyline]], p: Printer, page_w: float = 21
             q = fit_paper(strokes, p, margin=0.0, page_w=page_w)
         if not _fits(strokes, q):
             raise OutOfReach("couldn't place a group of answers within reach")
-        q.jig = False
+        # q keeps jig=True: the jig is still on the bed, so its keep-clear limits still apply
         passes.append(Pass(q, best, order_for_plotting(strokes), True))
         todo = [i for i in todo if i not in best]
     return passes
