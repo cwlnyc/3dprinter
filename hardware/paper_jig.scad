@@ -2,10 +2,10 @@
 // with nothing under the paper and no tape.
 //
 // A tray that hangs off the bed's front edge. Two small clips (paper_jig_clips)
-// push onto the tray's back corners; each has a hook that rests on the bed's
-// front corner, outside the paper, and a spine that bears on the bed's front
-// edge: the tray sticking out in front makes it lean back against the bed, so
-// gravity holds it there, no clamp needed. The tray's top is level with the bed
+// push onto the tray's back corners and grip the bed's front corners, outside
+// the paper, from above and below: the tray's weight, out in front, pinches the
+// bed between each clip's arms, so it can't tip off. (Resting on top alone, it
+// did.) No glass: the clips are sized to the bare bed plate. The tray's top is level with the bed
 // surface (the hooks set that, whatever the bed is made of), so the sheet lies
 // dead flat from the tray onto the bed, with no step.
 //
@@ -36,10 +36,12 @@ paper_l   = 279.4;  // the sheet ends paper_l - overhang behind the front edge
 overhang  = 60;     // tray depth: the sheet ends 15 mm before the back edge, clear of the back clips
 tray_t    = 4;      // tray thickness below the surface; its back face is what bears on the bed's edge
 hook_w    = 6;      // clips stay within the strip either side of the centred sheet
-hook_d    = 6;      // how far the hook reaches onto the bed
+hook_d    = 10;     // how far the clip reaches onto (and under) the bed
+bed_t     = 6.35;   // the bed plate's thickness at its front edge (1/4 inch, measured)
+bed_fits  = [-0.15, 0.05, 0.25];  // three sizes of clip round the bed: try each, keep the snug pair
 hook_t    = 1.6;
 spine_t   = 2;      // the clip's back, between the tray and the bed's edge
-jaw_l     = 10;     // how far the clip's jaws reach along the tray
+jaw_l     = 12;     // how far the clip's jaws reach along the tray
 fit       = 0.2;    // clearance round the tray in the clip
 fence_h   = 3;      // lip and wall height above the tray
 fence_t   = 2.4;
@@ -66,19 +68,29 @@ module jig() {
     }
 }
 
-// One clip, in the tray's frame (y = 0 at the tray's back face). Its profile is
-// the same along x, so it prints lying on its side: strong, and no overhangs.
-module clip_profile() {
-    // top jaw over the tray, carrying on back over the bed as the hook
+// One clip, in the tray's frame (y = 0 at the tray's back face, z = 0 the bed
+// surface). It wraps the tray's back edge and also the bed's front edge, top and
+// bottom: the tray's weight, out in front, pinches the bed between the clip's
+// two arms, which is what keeps it from tipping off. Its profile is the same
+// along x, so it prints lying on its side: strong, and no overhangs.
+module clip_profile(bed_gap) {
+    under = -bed_gap - hook_t;                  // bottom of the arm under the bed
+    // top arm: over the tray, across the spine, on top of the bed
     translate([-jaw_l, 0]) square([jaw_l + spine_t + hook_d, hook_t]);
-    // spine down the tray's back face
-    translate([0, -tray_t - fit - hook_t]) square([spine_t, tray_t + fit + 2 * hook_t]);
-    // bottom jaw under the tray
+    // spine, from the top arm down past the bed's underside
+    translate([0, under]) square([spine_t, -under + hook_t]);
+    // arm under the tray
     translate([-jaw_l, -tray_t - fit - hook_t]) square([jaw_l + spine_t, hook_t]);
+    // arm under the bed
+    translate([spine_t, under]) square([hook_d, hook_t]);
 }
 
-module clips() {  // two, side by side, lying flat for printing
-    for (i = [0, 1]) translate([0, i * 12, 0]) linear_extrude(hook_w) clip_profile();
+module clips() {  // a pair of each size, lying flat; notches on the tray end say which size
+    for (i = [0 : len(bed_fits) - 1], j = [0, 1])
+        translate([0, (i * 2 + j) * 16, 0]) difference() {
+            linear_extrude(hook_w) clip_profile(bed_t + bed_fits[i]);
+            for (n = [0 : i]) translate([-jaw_l - 0.01, 0.4, 1 + n * 1.6]) cube([1, hook_t, 0.8]);
+        }
 }
 
 part = "jig";  // openscad -D 'part="clips"' for the clips
