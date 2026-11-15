@@ -31,7 +31,7 @@ class Printer:
     # where the page's top-left corner lands, as measured by jig_calibrate.
     jig: bool = False
     jig_x: float = 225.6
-    jig_y: float = -60.0
+    jig_y: float = -62.0
     # Pen tip minus nozzle position. Measure: draw a dot, compare to the nozzle.
     pen_offset_x: float = 0.0
     pen_offset_y: float = 0.0
