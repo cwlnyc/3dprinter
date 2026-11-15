@@ -119,8 +119,10 @@ def test_answers_out_of_the_jigs_reach_get_a_second_pass(workspace):
         {"text": "x", "x": 190.0, "y": 20.0, "w": 15.0, "h": 8.0, "label": "top right"}])
     t = text_of(r)
     assert t.startswith("Ready: 2 answers in 2 passes"), t
-    assert "Pass 1: sheet in the jig. Writes in reach." in t
-    assert "Pass 2" in t and "top right" in t
+    assert "Pass 1: sheet in the jig, title towards you. Writes in reach." in t
+    # the top of the page is reached by turning the sheet round in the jig: no lining up
+    assert "Pass 2: the printer parks and waits: turn the sheet round, in the jig, title to the back" in t
+    assert "top right" in t
     gcode = (workspace / "out" / "answers.gcode").read_text()
     assert "M0 Turn:" in gcode  # parks and says how to turn the sheet between passes
 

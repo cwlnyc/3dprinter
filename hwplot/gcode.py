@@ -255,6 +255,18 @@ def place(strokes: list[Polyline], p: Printer, page_w: float = 215.9) -> tuple[P
     return fit_paper(strokes, p, page_w=page_w), True
 
 
+def jig_place(p: Printer, page_w: float, page_h: float, title_to_back: bool) -> Printer:
+    """The sheet in the jig. Title towards you: its top edge on the lip, its left
+    edge on the wall. Title to the back (turned round): its bottom edge on the lip,
+    its right edge on the wall, which brings the top of the page within reach."""
+    q = Printer(**asdict(p))
+    if title_to_back:
+        q.paper_x, q.paper_y, q.paper_flipped = p.jig_x - page_w, p.jig_y + page_h, False
+    else:
+        q.paper_x, q.paper_y, q.paper_flipped = p.jig_x, p.jig_y, True
+    return q
+
+
 def jig_reach(p: Printer) -> tuple[tuple[float, float], tuple[float, float]]:
     """The part of the page (page mm) the pen can write on when the sheet is in the jig."""
     (x0, x1), (y0, y1) = pen_range(p)
@@ -316,7 +328,7 @@ def _fits(strokes: list[Polyline], p: Printer) -> bool:
 
 
 def plan_passes(per_answer: list[list[Polyline]], p: Printer, page_w: float = 215.9,
-                margin: float = 2.0) -> list[Pass]:
+                margin: float = 2.0, page_h: float = 279.4) -> list[Pass]:
     """Split the answers into as few placements of the sheet as reach allows.
 
     The pen reaches a window of the page about 14 x 21 cm on this printer. When
@@ -329,12 +341,17 @@ def plan_passes(per_answer: list[list[Polyline]], p: Printer, page_w: float = 21
 
     todo = [i for i, s in enumerate(per_answer) if s]
     passes: list[Pass] = []
-    if p.jig and todo:
-        q, _ = place([], p, page_w)
-        inside = [i for i in todo if _fits(per_answer[i], q)]
-        if inside:
-            passes.append(Pass(q, inside, order_for_plotting([s for i in inside for s in per_answer[i]]), False))
-            todo = [i for i in todo if i not in inside]
+    if p.jig:
+        # Both ways round in the jig need no lining up: title towards you reaches
+        # most of the page, title to the back reaches the top strip.
+        for title_to_back in (False, True):
+            if not todo:
+                break
+            q = jig_place(p, page_w, page_h, title_to_back)
+            inside = [i for i in todo if _fits(per_answer[i], q)]
+            if inside:
+                passes.append(Pass(q, inside, order_for_plotting([s for i in inside for s in per_answer[i]]), False))
+                todo = [i for i in todo if i not in inside]
 
     (x0, x1), (y0, y1) = pen_range(p)
     win_w, win_h = (x1 - x0) - 2 * margin, (y1 - y0) - 2 * margin

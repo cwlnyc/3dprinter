@@ -26,3 +26,13 @@ def test_with_the_jig_on_the_pen_keeps_clear_of_its_wall_and_clips():
     # in page terms: never nearer than the clearance to the page's left edge, nor above the bed's edge
     (xa, _), (ya, _) = jig_reach(moved)
     assert xa == pytest.approx(JIG_WALL_CLEARANCE) and ya == pytest.approx(JIG_PAGE_TOP_TO_BED)
+
+
+def test_turned_round_in_the_jig_the_top_of_the_page_is_in_reach():
+    from hwplot.gcode import Printer, _reachable, jig_place
+    p = Printer(pen_offset_x=77.9, pen_offset_y=-12.2, jig=True, jig_x=218.8, jig_y=-63.8)
+    towards, back = jig_place(p, 182, 257, False), jig_place(p, 182, 257, True)
+    top = (120.0, 20.0)  # near the top of a B5 sheet, right of centre
+    assert not _reachable(towards, *top) and _reachable(back, *top)
+    # title to the back, the page's bottom-right corner sits in the jig's corner
+    assert back.pen(182, 257) == pytest.approx((p.jig_x, p.jig_y))

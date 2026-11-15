@@ -28,13 +28,17 @@ class Job:
         for n, ps in enumerate(self.passes, 1):
             ids = ", ".join(answers[i].id for i in ps.answers)
             if not ps.align:
-                where = "in the jig"
+                where = ("in the jig, title towards you" if ps.printer.paper_flipped
+                         else "in the jig, title to the back (bottom edge on the lip, right edge on the wall)")
             elif ps.printer.paper_flipped:
                 where = "turned round (title towards you)"
             else:
                 where = "the right way round (title to the back)"
             if n == 1:
                 out.append(f"Pass 1: sheet {where}. Writes {ids}.")
+            elif not ps.align:
+                out.append(f"Pass {n}: the printer parks and waits: turn the sheet round, {where}, "
+                           f"then press the knob. Writes {ids}.")
             else:
                 out.append(f"Pass {n}: the printer parks and its screen says how to turn the sheet: {where}. "
                            f"It then stops to line it up. Writes {ids}.")
@@ -42,10 +46,10 @@ class Job:
 
 
 def build(answers: list[Answer], hand: Hand, flat: np.ndarray | None, printer: Printer,
-          page_w: float = 215.9, seed: int = 0, cap_mm: float = 5.0) -> Job:
+          page_w: float = 215.9, seed: int = 0, cap_mm: float = 5.0, page_h: float = 279.4) -> Job:
     """Raises gcode.OutOfReach when an answer can't be reached in any placement."""
     per_answer = [render.render_answers([a], hand, flat, seed=seed + i, cap_mm=cap_mm)
                   for i, a in enumerate(answers)]
-    passes = plan_passes(per_answer, printer, page_w)
+    passes = plan_passes(per_answer, printer, page_w, page_h=page_h)
     gcode = generate_passes(passes, marks=render.alignment_marks(answers))
     return Job(order_for_plotting([s for strokes in per_answer for s in strokes]), passes, gcode)
