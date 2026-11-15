@@ -34,6 +34,10 @@ class Glyph:
         ys = [y for s in self.strokes for _, y in s]
         return (min(ys), max(ys)) if ys else (0.0, 0.0)
 
+    def height(self) -> float:
+        top, bottom = self.bounds()
+        return bottom - top
+
 
 @dataclass
 class Style:
@@ -54,6 +58,21 @@ class Style:
     slant_deg: float = 0.0        # measured from the writer's upright strokes; used for drawn symbols
 
 
+SHORT_LETTERS = "acemnorsuvwxz"  # no ascender or descender: about x-height tall
+
+
+def _usable(ch: str, vs: list["Glyph"], x_height: float) -> list["Glyph"]:
+    """The samples of ch worth writing with: a sample far taller than the rest of
+    its kind (a mis-cut cell, a stray mark caught with it) would come out as a
+    giant letter in the middle of a word."""
+    if len(vs) < 2:
+        return vs
+    hs = [g.height() for g in vs]
+    med = float(np.median(hs))
+    keep = [g for g, h in zip(vs, hs) if h <= 1.4 * med and not (ch in SHORT_LETTERS and h > 1.8 * x_height)]
+    return keep or [min(vs, key=lambda g: abs(g.height() - med))]
+
+
 @dataclass
 class Hand:
     glyphs: dict[str, list[Glyph]] = field(default_factory=dict)
@@ -63,11 +82,11 @@ class Hand:
 
     def variants(self, ch: str) -> list[Glyph]:
         if ch in self.glyphs:
-            return self.glyphs[ch]
+            return _usable(ch, self.glyphs[ch], self.x_height)
         # Fall back across case before giving up: a missing 'Q' can borrow 'q'.
         for alt in (ch.lower(), ch.upper()):
             if alt in self.glyphs:
-                return self.glyphs[alt]
+                return _usable(alt, self.glyphs[alt], self.x_height)
         return []
 
     def pick(self, ch: str, rng: random.Random) -> Glyph | None:
