@@ -248,3 +248,11 @@ def test_print_file_saves_it_and_streams_it(workspace):
     assert (workspace / "out" / "part.gcode").read_text() == gcode
     assert "Started" in r or "No printer" in r
     assert "Couldn't read" in text_of(call(server, "print_file", filename="x", gcode_gzip_base64="not gzip"))
+
+
+def test_set_pen_height_presses_a_little_past_touching(workspace):
+    server = connector.create_server(workspace, sender=Sender(open_serial=lambda port: FakeMarlin()))
+    r = text_of(call(server, "set_pen_height", touch_z=2.4))
+    p = Printer.load(str(workspace / "printer.json"))
+    assert p.z_down == 1.9 and p.z_up == 4.9 and "Z1.9" in r
+    assert "doesn't look" in text_of(call(server, "set_pen_height", touch_z=40))

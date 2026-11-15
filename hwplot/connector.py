@@ -33,6 +33,8 @@ from .glyphs import Hand
 from .solve import Answer
 from .usbprint import Sender, find_port
 
+PEN_PRESS = 0.5  # mm the pen is pushed past touching, onto the holder's spring
+
 PHOTO_EXT = (".jpg", ".jpeg", ".png", ".webp", ".heic")
 INSTRUCTIONS = """Writes homework answers on paper in the user's own handwriting, with a pen on their 3D printer.
 
@@ -329,6 +331,23 @@ def create_server(workspace: str | os.PathLike = "workspace", photos: str | os.P
             return "Nothing is printing."
         sender.cancel()
         return "Stopping: the pen lifts and the printer halts."
+
+    @server.tool()
+    def set_pen_height(touch_z: float) -> str:
+        """Set the pen's writing height from where it just touches the bed.
+
+        touch_z: the Z (from the printer's screen) at which the pen tip first
+        touches the bare bed. Writing presses PEN_PRESS mm further down, onto
+        the holder's spring; travel lifts it clear above that.
+        """
+        if not 0.5 <= touch_z <= 15:
+            return f"{touch_z} mm doesn't look like a pen-touch height: it should be a few mm."
+        p = printer()
+        p.z_down = round(touch_z - PEN_PRESS, 2)
+        p.z_up = round(p.z_down + 3.0, 2)
+        p.save(str(ws / "printer.json"))
+        return (f"Pen height set: writes at Z{p.z_down} ({PEN_PRESS} mm past touching), "
+                f"lifts to Z{p.travel_z:.1f} between strokes.")
 
     @server.tool()
     def jig_test_print() -> str:
