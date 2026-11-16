@@ -42,6 +42,16 @@ GRID_LEFT = MARGIN_MM + 3.0
 COLS = 12
 ROWS = 9
 DICT = cv2.aruco.DICT_4X4_50
+# Each box's label sits in the 5 mm gap under it: as big as fits, and black.
+LABEL_MM = 4.0                     # font size (em) of the character itself
+LABEL_TAB_MM = 4.2                 # the label's tab above each box (the gap is 5 mm)
+HINT_MM = 2.4                      # the word beside it, for look-alikes
+LABEL_HINTS = {
+    **{c: "small" for c in "ckopsuvwxz"}, **{c: "CAP" for c in "CKOPSUVWXZ"},
+    "l": "small L", "I": "cap i", "1": "one", "O": "CAP o", "0": "zero",
+    ".": "dot", ",": "comma", "'": "apos", '"': "quote", "-": "dash", "_": "under",
+    ":": "colon", ";": "semi", "`": "tick", "^": "caret", "~": "tilde",
+}
 READ_PX_PER_MM = 12.0              # finer than page.PX_PER_MM: skeletons need the detail
 
 
@@ -92,10 +102,13 @@ def render_page(page: int, dpi: int = 300, page_mm=LETTER_MM) -> Image.Image:
     img = Image.new("L", (W, H), 255)
     d = ImageDraw.Draw(img)
     try:
-        font = ImageFont.truetype("DejaVuSans.ttf", int(2.6 * px))
+        # Monospace bold: its 0/O and l/I/1 are told apart at a glance, which a
+        # plain sans at label size does not manage.
+        font = ImageFont.truetype("DejaVuSansMono-Bold.ttf", round(LABEL_MM * px))
+        hint_font = ImageFont.truetype("DejaVuSans.ttf", round(HINT_MM * px))
         small = ImageFont.truetype("DejaVuSans.ttf", int(3.2 * px))
     except OSError:
-        font = small = ImageFont.load_default()
+        font = hint_font = small = ImageFont.load_default()
 
     aruco = cv2.aruco.getPredefinedDictionary(DICT)
     side = round(MARKER_MM * px)
@@ -121,7 +134,16 @@ def render_page(page: int, dpi: int = 300, page_mm=LETTER_MM) -> Image.Image:
         tick = 1.5 * px
         d.line([x0 - tick, by, x0, by], fill=120, width=max(1, round(0.25 * px)))
         d.line([x1, by, x1 + tick, by], fill=120, width=max(1, round(0.25 * px)))
-        d.text((x0, y1 + 0.6 * px), cell.char, fill=90, font=font)
+        # The label sits in a grey tab joined to the top of its own box, so it
+        # reads as that box's heading and not as a caption for the box below it.
+        tab_y0 = y0 - LABEL_TAB_MM * px
+        d.rectangle([x0, tab_y0, x1, y0], fill=232, outline=200, width=max(1, round(0.2 * px)))
+        label_y = tab_y0 + 0.1 * px
+        d.text((x0 + 0.5 * px, label_y), cell.char, fill=0, font=font)
+        hint = LABEL_HINTS.get(cell.char)
+        if hint:
+            hx = x0 + 0.5 * px + d.textlength(cell.char, font=font) + 0.7 * px
+            d.text((hx, label_y + (LABEL_MM - HINT_MM) * 0.5 * px), hint, fill=60, font=hint_font)
     return img
 
 
