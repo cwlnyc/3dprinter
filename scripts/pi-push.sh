@@ -10,8 +10,10 @@ TARGET=${1:?usage: ./scripts/pi-push.sh user@hostname.local   (e.g. pi@hwplot.lo
 
 # Stop the Mac's connector first if it's running: two connectors would fight
 # over who the front door points at.
-# Photos sent to the Pi from chat, and its own output, stay put.
-rsync -az --delete --exclude .venv --exclude __pycache__ --exclude .pytest_cache --exclude relay/.wrangler \
-  --exclude workspace/photos --exclude workspace/out \
+# Photos sent to the Pi from chat, and its own output, stay put. --update keeps
+# any file that is newer on the Pi: the jig calibration (printer.json) and
+# handwriting improved from the chat (hand.json) live there, not on the Mac.
+rsync -az --update --delete --exclude .venv --exclude __pycache__ --exclude .pytest_cache --exclude relay/.wrangler \
+  --exclude workspace/photos --exclude workspace/out --exclude workspace/hand.prev.json \
   ./ "$TARGET:3dprinter/"
 ssh -t "$TARGET" 'bash 3dprinter/scripts/pi-setup.sh'

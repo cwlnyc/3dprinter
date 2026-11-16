@@ -218,6 +218,23 @@ def create_server(workspace: str | os.PathLike = "workspace", photos: str | os.P
         return path.read_text()
 
     @server.tool()
+    def put_handwriting(hand_json: str) -> str:
+        """Replace the learned handwriting (hand.json) with an improved one, e.g. with letters added from
+        the user's real writing. The previous one is kept as hand.prev.json."""
+        tmp = ws / "hand.new.json"
+        tmp.write_text(hand_json)
+        try:
+            Hand.load(str(tmp))
+        except (ValueError, KeyError, TypeError) as e:
+            tmp.unlink()
+            return f"That isn't a handwriting file: {e}"
+        path = ws / "hand.json"
+        if path.exists():
+            (ws / "hand.prev.json").write_text(path.read_text())
+        tmp.replace(path)
+        return f"Handwriting replaced ({len(json.loads(hand_json)['glyphs'])} characters); the old one is in hand.prev.json."
+
+    @server.tool()
     def zoom(x: float, y: float, w: float, h: float) -> list:
         """A sharper close-up of part of the sheet (mm on the page), for reading small text."""
         s = sheet()

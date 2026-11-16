@@ -258,3 +258,15 @@ def test_set_pen_height_presses_a_little_past_touching(workspace):
     p = Printer.load(str(workspace / "printer.json"))
     assert p.z_down == 1.9 and p.z_up == 4.9 and "Z1.9" in r
     assert "doesn't look" in text_of(call(server, "set_pen_height", touch_z=40))
+
+
+def test_put_handwriting_replaces_it_and_keeps_the_old_one(workspace):
+    server = connector.create_server(workspace, sender=Sender(open_serial=lambda port: FakeMarlin()))
+    before = (workspace / "hand.json").read_text()
+    d = json.loads(before)
+    d["style"]["word_space"] = 0.45
+    r = text_of(call(server, "put_handwriting", hand_json=json.dumps(d)))
+    assert "replaced" in r and (workspace / "hand.prev.json").read_text() == before
+    assert json.loads((workspace / "hand.json").read_text())["style"]["word_space"] == 0.45
+    assert "isn't a handwriting" in text_of(call(server, "put_handwriting", hand_json="{}"))
+    assert json.loads((workspace / "hand.json").read_text())["style"]["word_space"] == 0.45
