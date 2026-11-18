@@ -24,6 +24,6 @@
   test. Automatic paper detection (colour thresholds, GrabCut) was tried and
   was not reliable under the desk lamp and the printer screen's blue light.
 - The jig calibration was re-derived from printed test circles photographed in
-  the jig: corner at X226.1, Y-67.0 (the earlier cross measurement had been
+  the jig: corner at X225.7, Y-63.4 (the earlier cross measurement had been
   misread). If pages still land consistently off, correct jig_x/jig_y rather
   than shifting answers per page.
