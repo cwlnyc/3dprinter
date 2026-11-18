@@ -198,4 +198,5 @@ def test_sheet_is_turned_round_when_that_keeps_it_off_the_frame(hand):
 
 def test_travel_never_skims_the_paper():
     p = Printer(z_down=1.7, z_up=2.2)
-    assert p.travel_z >= 1.7 + 4.5
+    from hwplot.gcode import TRAVEL_CLEARANCE
+    assert TRAVEL_CLEARANCE >= 2.0 and p.travel_z >= 1.7 + TRAVEL_CLEARANCE

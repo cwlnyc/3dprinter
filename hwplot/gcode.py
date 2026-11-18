@@ -37,13 +37,13 @@ class Printer:
     pen_offset_y: float = 0.0
     z_down: float = 0.0       # Z at which the pen touches paper (spring slightly compressed)
     z_up: float = 3.0         # Z for travel moves (never less than TRAVEL_CLEARANCE above z_down)
-    feed_draw: int = 1500     # mm/min
+    feed_draw: int = 2500     # mm/min
     feed_travel: int = 6000
-    feed_z: int = 900
+    feed_z: int = 600         # the Ender's firmware caps Z at 5 mm/s unless the start code raises it
     # M420 S1 turns the stored auto-level map back on: Marlin switches it off on
     # G28 unless built otherwise, and without it the pen height drifts across
     # the page. With no map stored it just reports that and carries on.
-    start: str = "G28\nM420 S1\nG90\nG21"
+    start: str = "G28\nM420 S1\nM203 Z10\nG90\nG21"
     pause: str = "M0"          # Klipper users: PAUSE
     end: str = "G0 Z15 F900\nG0 X0 Y{bed_y} F6000\nM84"
 
@@ -51,7 +51,7 @@ class Printer:
     def load(cls, path: str) -> "Printer":
         with open(path) as f:
             values = json.load(f)
-        if values.get("start") == OLD_START:  # saved before the levelling map was switched on
+        if values.get("start") in (OLD_START, "G28\nM420 S1\nG90\nG21"):  # saved before the levelling map was switched on
             values["start"] = cls.start
         return cls(**values)
 
@@ -84,7 +84,10 @@ OLD_START = "G28\nG90\nG21"
 # wide, so the pen stays 10.6 mm from that wall.
 JIG_PAGE_TOP_TO_BED = 64.0
 JIG_WALL_CLEARANCE = 10.6
-TRAVEL_CLEARANCE = 4.5  # mm above pen-down for moves between strokes
+# mm above pen-down for moves between strokes. Every stroke lifts by this and
+# drops back, so it is most of a page's print time; with the sheet clipped in
+# the jig nothing lifts it, so 2 mm clears the paper.
+TRAVEL_CLEARANCE = 2.0
 
 
 class OutOfReach(ValueError):
