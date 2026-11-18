@@ -16,7 +16,7 @@ def test_start_turns_the_levelling_map_on(tmp_path):
 def test_with_the_jig_on_the_pen_keeps_clear_of_its_wall_and_clips():
     from hwplot.gcode import JIG_PAGE_TOP_TO_BED, JIG_WALL_CLEARANCE, Printer, jig_reach, pen_range
     plain = Printer(pen_offset_x=77.9, pen_offset_y=-12.2)
-    jig = Printer(pen_offset_x=77.9, pen_offset_y=-12.2, jig=True)
+    jig = Printer(pen_offset_x=77.9, pen_offset_y=-12.2, jig=True, jig_y=-64.0)  # the jig as designed
     (_, x1), (y0, _) = pen_range(jig)
     assert x1 == jig.jig_x - JIG_WALL_CLEARANCE < pen_range(plain)[0][1]
     assert y0 == 0  # as built, the bed's front edge is where the printer thinks it is
