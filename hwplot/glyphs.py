@@ -66,11 +66,22 @@ def _usable(ch: str, vs: list["Glyph"], x_height: float) -> list["Glyph"]:
     its kind (a mis-cut cell, a stray mark caught with it) would come out as a
     giant letter in the middle of a word."""
     if len(vs) < 2:
-        return vs
+        return [_fit_height(g, 1.15 * x_height) for g in vs] if ch in SHORT_LETTERS else vs
     hs = [g.height() for g in vs]
     med = float(np.median(hs))
     keep = [g for g, h in zip(vs, hs) if h <= 1.4 * med and not (ch in SHORT_LETTERS and h > 1.8 * x_height)]
-    return keep or [min(vs, key=lambda g: abs(g.height() - med))]
+    keep = keep or [min(vs, key=lambda g: abs(g.height() - med))]
+    if ch in SHORT_LETTERS:  # a short letter a third taller than the rest reads as a capital: size it down
+        keep = [_fit_height(g, 1.15 * x_height) for g in keep]
+    return keep
+
+
+def _fit_height(g: "Glyph", most: float) -> "Glyph":
+    h = g.height()
+    if h <= most:
+        return g
+    k = most / h
+    return Glyph([[(x * k, y * k) for x, y in s] for s in g.strokes], g.width * k)
 
 
 @dataclass

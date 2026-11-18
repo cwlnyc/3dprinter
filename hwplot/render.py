@@ -93,15 +93,23 @@ def write(text: str, box, hand: Hand, rng: random.Random, cap_mm: float = 5.0, b
 
 
 def circle(box, rng: random.Random) -> list[Polyline]:
-    """A hand-drawn loop around a multiple-choice option: slightly oversized, overlapping at the end."""
+    """A hand-drawn loop around a multiple-choice option, the way this writer circles:
+    started at the top, round anticlockwise, a little egg-shaped, and finished by
+    running past the start into a small inward tick."""
     x, y, w, h = box
-    cx, cy, rx, ry = x + w / 2, y + h / 2, w / 2 + 1.5, h / 2 + 1.2
-    start = rng.uniform(0, 2 * math.pi)
+    cx, cy, rx, ry = x + w / 2, y + h / 2, w / 2 + 1.5, h / 2 + 1.4
+    lean = rng.uniform(-0.08, 0.08)
     pts = []
-    for k in range(73):
-        t = start + 2.15 * math.pi * k / 72
-        wobble = 1 + 0.03 * math.sin(3 * t + start)
-        pts.append((cx + rx * wobble * math.cos(t), cy + ry * wobble * math.sin(t)))
+    start = -math.pi / 2 + rng.uniform(0.05, 0.25)          # just right of the top
+    for k in range(80):
+        t = start - 2 * math.pi * 1.06 * k / 79               # anticlockwise, a little past the start
+        egg = 1 + 0.06 * math.sin(t)                          # fuller at the bottom
+        wob = 1 + 0.025 * math.sin(3 * t + lean * 10)
+        px, py = rx * wob * math.cos(t), ry * egg * wob * math.sin(t)
+        pts.append((cx + px + lean * py, cy + py))
+    # the tick: a short flick down and inward from where the pen came round
+    ex, ey = pts[-1]
+    pts += [(ex + 0.35, ey + 0.55), (ex + 0.55, ey + 1.0)]
     return [pts]
 
 
