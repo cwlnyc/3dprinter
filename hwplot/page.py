@@ -49,15 +49,20 @@ def find_page(img: np.ndarray) -> np.ndarray | None:
 
 
 def flatten(img: np.ndarray, page_mm=LETTER_MM, corners: np.ndarray | None = None,
-            scale: float = PX_PER_MM) -> np.ndarray:
-    """Warp the sheet to a top-down image of exactly page_mm at scale px/mm (PX_PER_MM by default)."""
+            scale: float = PX_PER_MM, ordered: bool = False) -> np.ndarray:
+    """Warp the sheet to a top-down image of exactly page_mm at scale px/mm (PX_PER_MM by default).
+
+    ordered: corners are already the page's TL, TR, BR, BL (as read off the page),
+    so a photo with the page upside down or sideways comes out the right way up.
+    """
     w, h = int(page_mm[0] * scale), int(page_mm[1] * scale)
     if corners is None:
         corners = find_page(img)
     if corners is None:
         return cv2.resize(img, (w, h), interpolation=cv2.INTER_AREA)
     dst = np.array([[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]], np.float32)
-    m = cv2.getPerspectiveTransform(order_corners(corners), dst)
+    src = np.float32(corners) if ordered else order_corners(corners)
+    m = cv2.getPerspectiveTransform(src, dst)
     return cv2.warpPerspective(img, m, (w, h))
 
 
