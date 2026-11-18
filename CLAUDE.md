@@ -16,3 +16,14 @@
 - Before every print, tell the user exactly how to put the sheet in for each
   pass: which end towards them, which side up, which edge on the wall, and a
   check they can see (e.g. "No./Date and ~3 cm of blank paper next to the lip").
+- Homework photos: ask for them taken with the sheet already clipped in the jig,
+  from straight above, whole sheet in view. Then find the page's four corners
+  by eye on zoomed crops (the top and left edges are pinned straight by the lip
+  and wall) and pass them to page.flatten(corners=...). Corners guessed from a
+  loose photo were off by up to ~9 mm, which is what made every page need a
+  test. Automatic paper detection (colour thresholds, GrabCut) was tried and
+  was not reliable under the desk lamp and the printer screen's blue light.
+- The jig calibration was re-derived from printed test circles photographed in
+  the jig: corner at X226.1, Y-67.0 (the earlier cross measurement had been
+  misread). If pages still land consistently off, correct jig_x/jig_y rather
+  than shifting answers per page.

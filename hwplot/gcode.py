@@ -30,8 +30,8 @@ class Printer:
     # fixed spot is used and no alignment stops are needed. jig_x / jig_y are
     # where the page's top-left corner lands, as measured by jig_calibrate.
     jig: bool = False
-    jig_x: float = 225.6
-    jig_y: float = -64.0
+    jig_x: float = 226.1
+    jig_y: float = -67.0
     # Pen tip minus nozzle position. Measure: draw a dot, compare to the nozzle.
     pen_offset_x: float = 0.0
     pen_offset_y: float = 0.0
